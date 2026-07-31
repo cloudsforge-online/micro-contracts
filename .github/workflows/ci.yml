@@ -29,9 +29,18 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
-      # A contract change that breaks a consumer must fail HERE, in the repo that owns the
-      # contract, not in the first consumer to upgrade.
-      - run: pnpm compat
+
+  # A contract change that breaks a consumer must fail HERE, in the repo that owns the contract,
+  # not in the first consumer to upgrade. The checker itself lives in micro-org so that one
+  # implementation judges every contract repository — this repository's own `pnpm compat` script
+  # named a tools/compat.ts that has never existed here, so the check it claimed to run had never
+  # run anywhere. `fetch-depth: 0` matters: the checker reads each package as it was at the base
+  # ref, and a shallow clone silently has nothing to compare against.
+  compat:
+    uses: cloudsforge-online/micro-org/.github/workflows/contract-compat.yml@main
+    permissions:
+      contents: read
+
   hygiene:
     uses: cloudsforge-online/micro-org/.github/workflows/secret-hygiene.yml@main
     with:
