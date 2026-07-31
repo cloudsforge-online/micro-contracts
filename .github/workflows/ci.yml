@@ -1,0 +1,40 @@
+name: CI
+
+# A library workspace, not a service: it serves no /livez, /readyz or /metrics, owns no database
+# and ships no container, so micro-org/service-ci.yml — whose rules assert exactly those things —
+# does not fit it, and forcing it through would mean weakening the rules for everyone else.
+# This file is therefore the minimal bespoke check the estate allows a library: the workspace's
+# own typecheck and test scripts, plus the shared secret hygiene.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # A single checkout at the workspace root, so the action reads the packageManager field
+      # (pnpm@11.9.0) itself — no version to drift here.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      # A contract change that breaks a consumer must fail HERE, in the repo that owns the
+      # contract, not in the first consumer to upgrade.
+      - run: pnpm compat
+  hygiene:
+    uses: cloudsforge-online/micro-org/.github/workflows/secret-hygiene.yml@main
+    with:
+      require-dockerignore: false
+    permissions:
+      contents: read
