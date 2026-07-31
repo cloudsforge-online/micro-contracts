@@ -38,6 +38,10 @@ jobs:
   # ref, and a shallow clone silently has nothing to compare against.
   compat:
     uses: cloudsforge-online/micro-org/.github/workflows/contract-compat.yml@main
+    secrets:
+      # The checker lives in micro-org, which is private, so fetching it needs a contents:read
+      # token — the job token is scoped to THIS repository and cannot see another one.
+      estate_token: ${{ secrets.ESTATE_READ_TOKEN }}
     permissions:
       contents: read
 
