@@ -190,6 +190,7 @@ export type ProducerService =
   | 'market'
   | 'trade'
   | 'worlds'
+  | 'aetherholm'
   | 'nda'
   | 'community'
   | 'devplatform'
@@ -345,6 +346,45 @@ export const TOPICS = Object.freeze({
     version: '1.0',
     keyedBy: 'community_id',
     description: 'A passed proposal cleared its timelock and executed. Treasury spends land here.',
+  }),
+  // Aetherholm, the third Forge Worlds title (docs/ecosystem/20-aetherholm.md). Registered
+  // BEFORE anything subscribes, because an unregistered topic is the devplatform lesson:
+  // `makeEvent` refuses it and a consumer's validateEnvelope flags it as "contracts-events may
+  // be behind" — acknowledged and ignored is the failure mode being avoided.
+  'aetherholm.season.opened': Object.freeze({
+    producer: 'aetherholm',
+    payloadType: 'SeasonOpened',
+    version: '1.0',
+    keyedBy: 'season_id',
+    description: 'A season opened with its seed and public archipelago. The seed is public data.',
+  }),
+  'aetherholm.city.founded': Object.freeze({
+    producer: 'aetherholm',
+    payloadType: 'CityFounded',
+    version: '1.0',
+    keyedBy: 'city_id',
+    description: 'A player founded a city on an island plot, with its free 7-day aegis.',
+  }),
+  'aetherholm.building.completed': Object.freeze({
+    producer: 'aetherholm',
+    payloadType: 'BuildingCompleted',
+    version: '1.0',
+    keyedBy: 'city_id',
+    description: 'A queued building level finished and the city economy was recomputed.',
+  }),
+  'aetherholm.research.completed': Object.freeze({
+    producer: 'aetherholm',
+    payloadType: 'ResearchCompleted',
+    version: '1.0',
+    keyedBy: 'city_id',
+    description: 'A queued research node completed for a player on an archipelago.',
+  }),
+  'aetherholm.skerry.provisioned': Object.freeze({
+    producer: 'aetherholm',
+    payloadType: 'SkerryProvisioned',
+    version: '1.0',
+    keyedBy: 'entitlement_id',
+    description: 'The title contract delivered a Private Skerry for a billing entitlement.',
   }),
 } as const satisfies Readonly<Record<string, TopicSpec>>)
 
