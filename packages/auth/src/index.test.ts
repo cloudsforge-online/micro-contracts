@@ -82,7 +82,6 @@ test('the scope registry is a closed, enumerated set — every widening is delib
     'mint:write',
     'nda:write',
     'notify:read',
-    'notify:send',
     'policy:decide',
     'pricing:admin',
     'pricing:read',
@@ -94,7 +93,6 @@ test('the scope registry is a closed, enumerated set — every widening is delib
     'trade:read',
     'trade:write',
     'wallet:money',
-    'wallet:provision',
     'wallet:read',
     'wallet:write',
     'worlds:admin',
@@ -102,6 +100,33 @@ test('the scope registry is a closed, enumerated set — every widening is delib
     'worlds:title',
     'worlds:write',
   ])
+})
+
+/**
+ * The reverse direction of the audit, which no repository's CI can run.
+ *
+ * `service-ci.yml` proves **demands ⊆ registry** for one service at a time — a gate asking for an
+ * unregistered scope fails that repository's build. Nothing proves the other direction, because no
+ * single checkout can see every gate in the estate: a scope here that no gate anywhere demands is
+ * invisible to every build and to this file's own inventory pin, which was written from the
+ * registry rather than from the gates. Both entries below were exactly that, and the pin was
+ * protecting them.
+ *
+ * A dead scope is not inert. identity mints tokens from this list, so it is a credential that can
+ * be granted, audited and rotated while opening nothing — and the next reader takes it as evidence
+ * that a capability exists somewhere.
+ */
+test('the two scopes no gate in the estate demands stay deleted', () => {
+  // notify/src/server.ts:417 — /ingest is MAC-only. The signature over the raw bytes IS the
+  // authentication; no bearer is read, so no scope can gate it. notify had already deleted
+  // `notify:ingest` on this reasoning and recorded it at notify/src/server.ts:99.
+  assert.equal(isScope('notify:send'), false)
+  // wallet/src/server.ts:132 — read / write / money, three authorities, deliberately. Creating a
+  // wallet (:464) and assigning a deposit address (:605) are both `wallet:write`.
+  assert.equal(isScope('wallet:provision'), false)
+  // And the two that DO gate those surfaces are still here, so this is not passing by amputation.
+  assert.equal(isScope('notify:read'), true)
+  assert.equal(isScope('wallet:write'), true)
 })
 
 test('every scope names the service that enforces it and says what it permits', () => {

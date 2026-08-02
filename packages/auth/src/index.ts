@@ -315,10 +315,15 @@ export const SCOPES = Object.freeze({
     description:
       "Read a user's notifications and preferences as a service. Gated at notify/src/server.ts:312.",
   }),
-  'notify:send': Object.freeze({
-    service: 'notify',
-    description: 'Enqueue a notification or a developer webhook delivery.',
-  }),
+  // `notify:send` was here and is deleted. Nothing in the estate enqueues a notification with a
+  // bearer token: notify's inbound surface is `/ingest`, which the §3.3p repair made MAC-ONLY —
+  // the signature over the raw bytes IS the authentication and no token is read at all
+  // (notify/src/server.ts:417) — plus `/notifications` (notify:read), `/preferences` (the user's
+  // own) and `/admin/*` (operator role). notify itself already deleted `notify:ingest` for exactly
+  // this reason and wrote down why (notify/src/server.ts:99): "a dead scope constant is worse than
+  // none: it reads as a capability", and registering one lets identity mint a credential that
+  // opens nothing. If notify ever grows a service-to-service send route, the scope comes back in
+  // the same commit as its gate.
   'policy:decide': Object.freeze({
     service: 'policy',
     description: 'Submit a decision request and receive allow, deny, challenge or review.',
@@ -370,10 +375,12 @@ export const SCOPES = Object.freeze({
     description:
       'Move money: withdrawals and holds. Separated from wallet:write so a caller that manages wallets cannot also spend from them. Gated at wallet/src/server.ts:646 and three siblings.',
   }),
-  'wallet:provision': Object.freeze({
-    service: 'wallet',
-    description: 'Create a managed wallet and assign a deposit address.',
-  }),
+  // `wallet:provision` was here and is deleted. Both acts it named are gated on `wallet:write`
+  // today — creating a wallet at wallet/src/server.ts:464 and assigning a deposit address at
+  // wallet/src/server.ts:605 — and wallet states its authority split in one place
+  // (wallet/src/server.ts:132): three scopes, read / write / money, "because reading a portfolio,
+  // registering a wallet and moving money are three different authorities". A fourth that no gate
+  // demands is not a tighter split, it is a credential identity can mint which opens nothing.
   'wallet:read': Object.freeze({
     service: 'wallet',
     description: 'Read the wallet registry, deposit assignments and withdrawal state.',
