@@ -39,27 +39,68 @@ test('the scope registry is a closed, enumerated set — every widening is delib
   // service tokens and no shared bearer secrets — a principle; it enumerates no scopes. The list
   // below is the REGISTRY's own inventory, pinned so a scope can only be added by editing this
   // file in the same commit — which is the property that matters. The 2026-08-02 audit found the
-  // estate's services gate on ~30 scopes this registry lacked (identity therefore could not mint
+  // estate's services gating on 39 scopes this registry lacked (identity therefore could not mint
   // a token for most service-to-service surfaces, and every suite was green off fake principals);
-  // the games-vertical trio lands here first, the rest with the per-repo totality rule.
+  // all 39 are registered below with their gate citations, and micro-org's service-ci.yml now
+  // derives every repository's demands and fails its build if one is missing here — so this list
+  // grows in the same commit as the gate that needs it, or that repository's CI goes red.
   assert.deepEqual([...SCOPE_NAMES].sort(), [
+    'admin:audit:write',
+    'admin:read',
     'aetherholm:provision',
     'aetherholm:read',
+    'aetherholm:write',
+    'analytics:admin',
+    'analytics:ingest',
+    'analytics:read',
+    'beacon:gate',
+    'beacon:read',
+    'beacon:write',
     'billing:grant',
     'billing:read',
+    'community:execute',
+    'community:write',
+    'custody:address:create',
     'custody:sign:deployer',
     'custody:sign:deposit',
     'custody:sign:treasury',
+    'custody:treasury:read',
+    'devplatform:admin',
+    'devplatform:introspect',
+    'emberkin:write',
+    'faucet:read',
     'indexer:read',
+    'indexer:write',
+    'lantern:read',
     'ledger:post',
     'ledger:read',
     'ledger:reserve',
+    'market:admin',
+    'market:read',
+    'market:write',
+    'mint:read',
+    'mint:write',
+    'nda:write',
+    'notify:read',
     'notify:send',
     'policy:decide',
+    'pricing:admin',
     'pricing:read',
+    'settlement:read',
+    'settlement:register',
+    'studio:read',
+    'studio:write',
+    'trade:admin',
+    'trade:read',
+    'trade:write',
+    'wallet:money',
     'wallet:provision',
     'wallet:read',
+    'wallet:write',
+    'worlds:admin',
+    'worlds:read',
     'worlds:title',
+    'worlds:write',
   ])
 })
 

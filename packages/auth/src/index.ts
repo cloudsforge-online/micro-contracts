@@ -122,12 +122,154 @@ export interface ScopeSpec {
  * unbounded scope: any holder of `PAY_SERVICE_TOKEN` could do anything Pay could do, and there
  * was no way to say that Forge Hub's BFF may read a balance but may not post to the ledger.
  *
- * The three custody scopes are separated **by purpose, not by verb**, because that is what
+ * The custody signing scopes are separated **by purpose, not by verb**, because that is what
  * custody's purpose gate already enforces internally and the token must not be able to express
  * something the gate would refuse. A single `custody:sign` would let a service that only ever
  * sweeps deposits ask for a treasury signature.
+ *
+ * ── Total against the estate, and kept that way mechanically (2026-08-02) ────────────────────
+ * A full audit found this registry knew 14 scopes while the estate's services gated on 39 more —
+ * identity fail-fasts on any grant naming an unknown scope (identity/src/env.ts:141), so most
+ * service-to-service surfaces were unreachable by identity-issued tokens while every suite
+ * stayed green off its own fake principals. All 39 are now registered below, each citing the
+ * gate that demands it. What keeps the list total is not this comment: micro-org's
+ * service-ci.yml derives every scope a repository's gates demand — inline literals, sibling
+ * constants, wrapper arguments, computed families closed over an enumerated set — and fails
+ * that repository's build if one is absent here. Deliberate non-registrations are exemptions
+ * with written reasons in the demanding repository's scope-exemptions.json: custody:sign:user
+ * (purposeGate refuses user rows unconditionally) and the service template's placeholders.
+ * ─────────────────────────────────────────────────────────────────────────────────────────────
  */
 export const SCOPES = Object.freeze({
+  'admin:audit:write': Object.freeze({
+    service: 'admin-api',
+    description:
+      'Mirror an audit row into the estate audit of record. Held by every service that writes audit rows; gated at admin-api/src/server.ts:510, after the envelope signature check — the signature proves the estate secret, the scope proves which service.',
+  }),
+  'admin:read': Object.freeze({
+    service: 'admin-api',
+    description:
+      'Read the operator surface service-to-service: the audit mirror, the approval queue, flags and broadcasts. Gated at admin-api/src/server.ts:454. Matched exactly (§3.3h) — admin:* is the credential this estate exists to remove.',
+  }),
+  'aetherholm:provision': Object.freeze({
+    service: 'aetherholm',
+    description:
+      'Provision a Private Skerry for a worlds entitlement. Gated at aetherholm/src/server.ts:343; held by worlds alone — the provisioning bridge is the only caller.',
+  }),
+  'aetherholm:read': Object.freeze({
+    service: 'aetherholm',
+    description:
+      'Read seasons, islands and cities service-to-service. Gated at aetherholm/src/server.ts:384 and eight siblings.',
+  }),
+  'aetherholm:write': Object.freeze({
+    service: 'aetherholm',
+    description:
+      "Act on a named user's cities: requireUser's service lane demands this plus an x-user-id header. Gated at aetherholm/src/server.ts:1034.",
+  }),
+  'analytics:admin': Object.freeze({
+    service: 'analytics',
+    description:
+      'Define or redefine a live series, idempotently and checksummed. Gated at analytics/src/server.ts:592 and :620.',
+  }),
+  'analytics:ingest': Object.freeze({
+    service: 'analytics',
+    description:
+      'Deliver signed analytics events to /v1/ingest. Gated at analytics/src/server.ts:459, before the payload signature is verified.',
+  }),
+  'analytics:read': Object.freeze({
+    service: 'analytics',
+    description:
+      'Read series and reports as a service; an operator role passes without it. Gated at analytics/src/server.ts:130 (requireReader).',
+  }),
+  'beacon:gate': Object.freeze({
+    service: 'beacon',
+    description:
+      'Evaluate the release gate for a tag. Read-only by design — asking must not change the answer. Gated at beacon/src/server.ts:379 and :399.',
+  }),
+  'beacon:read': Object.freeze({
+    service: 'beacon',
+    description:
+      'Read release status, checks and the gated /metrics — an open metrics endpoint publishes the shape of the estate (AD-20). Gated at beacon/src/server.ts:358 and seven siblings.',
+  }),
+  'beacon:write': Object.freeze({
+    service: 'beacon',
+    description:
+      'Report check results and releases; the break-glass override additionally requires the admin lane. Gated at beacon/src/server.ts:428 and eight siblings.',
+  }),
+  'billing:grant': Object.freeze({
+    service: 'billing',
+    description: 'Grant or revoke an entitlement.',
+  }),
+  'billing:read': Object.freeze({
+    service: 'billing',
+    description: 'Ask whether a subject holds an entitlement. Today no service can ask at all.',
+  }),
+  'community:execute': Object.freeze({
+    service: 'community',
+    description:
+      "Execute an approved proposal on /internal — the queue worker's lane, matched exactly. Gated at community/src/server.ts:1030.",
+  }),
+  'community:write': Object.freeze({
+    service: 'community',
+    description:
+      'Enqueue execution of a passed proposal. Gated at community/src/server.ts:1056 — an inline literal, the shape the constant-reading audit sweep missed.',
+  }),
+  'custody:address:create': Object.freeze({
+    service: 'custody',
+    description:
+      'Create a custody address under a named purpose and family. Gated at custody/src/server.ts:323 and :373.',
+  }),
+  'custody:sign:deployer': Object.freeze({
+    service: 'custody',
+    description: 'Sign a contract deployment paying gas from the platform deployer.',
+  }),
+  'custody:sign:deposit': Object.freeze({
+    service: 'custody',
+    description: 'Sign a sweep out of a deposit address. Held by settlement alone.',
+  }),
+  'custody:sign:treasury': Object.freeze({
+    service: 'custody',
+    description: 'Sign a treasury spend. Gated additionally by the treasury pin.',
+  }),
+  'custody:treasury:read': Object.freeze({
+    service: 'custody',
+    description:
+      'Read the pinned treasury address for a chain and network — the address, and nothing else of its binding. Gated at custody/src/server.ts:407.',
+  }),
+  'devplatform:admin': Object.freeze({
+    service: 'devplatform',
+    description:
+      "Operate on customers' projects and quotas. Deliberately absent from the customer API-key vocabulary, so no key can ever hold it; only a service token or an operator role reaches it. Gated at devplatform/src/server.ts:554.",
+  }),
+  'devplatform:introspect': Object.freeze({
+    service: 'devplatform',
+    description:
+      'Verify a customer API key on /internal/keys/verify. Matched exactly, so devplatform:* is refused on the route that reads credentials. Gated at devplatform/src/server.ts:1373 and two siblings.',
+  }),
+  'emberkin:write': Object.freeze({
+    service: 'emberkin',
+    description:
+      "Act on a named user's save: requireUser's service lane demands this plus an x-user-id header. Gated at emberkin/src/server.ts:453.",
+  }),
+  'faucet:read': Object.freeze({
+    service: 'faucet',
+    description:
+      'Read faucet state service-to-service; the static collector token synthesises exactly this and no more. Gated at faucet/src/server.ts:507.',
+  }),
+  'indexer:read': Object.freeze({
+    service: 'indexer',
+    description: 'Read blocks, transactions, address activity and observed balances.',
+  }),
+  'indexer:write': Object.freeze({
+    service: 'indexer',
+    description:
+      'Watch or unwatch an address. Held by the services that register deposit interest; gated at indexer/src/server.ts:551 and :573.',
+  }),
+  'lantern:read': Object.freeze({
+    service: 'lantern',
+    description:
+      'Read issues and events service-to-service; there is no write surface, so read is the only authority. Gated at lantern/src/server.ts:465.',
+  }),
   'ledger:read': Object.freeze({
     service: 'ledger',
     description: 'Read accounts, balances and journal entries.',
@@ -140,64 +282,38 @@ export const SCOPES = Object.freeze({
     service: 'ledger',
     description: 'Move funds between available and reserved. Held by market and trade.',
   }),
-  'wallet:read': Object.freeze({
-    service: 'wallet',
-    description: 'Read the wallet registry, deposit assignments and withdrawal state.',
-  }),
-  'wallet:provision': Object.freeze({
-    service: 'wallet',
-    description: 'Create a managed wallet and assign a deposit address.',
-  }),
-  'custody:sign:deposit': Object.freeze({
-    service: 'custody',
-    description: 'Sign a sweep out of a deposit address. Held by settlement alone.',
-  }),
-  'custody:sign:treasury': Object.freeze({
-    service: 'custody',
-    description: 'Sign a treasury spend. Gated additionally by the treasury pin.',
-  }),
-  'custody:sign:deployer': Object.freeze({
-    service: 'custody',
-    description: 'Sign a contract deployment paying gas from the platform deployer.',
-  }),
-  /* ── The games vertical, first three of many ─────────────────────────────────────────────────
-   * A full audit (2026-08-02) found the estate's services gate on ~30 scopes this registry does
-   * not contain — identity refuses to mint any of them, so most service-to-service surfaces are
-   * unreachable by identity-issued tokens and every suite stayed green because each mints its own
-   * fake principals. The three below are added now with their gate citations because the slice's
-   * title-bridge drill needs them; the remainder land with the per-repo CI rule that makes this
-   * registry provably total against what services actually demand.
-   * ------------------------------------------------------------------------------------------ */
-  'worlds:title': Object.freeze({
-    service: 'worlds',
+  'market:admin': Object.freeze({
+    service: 'market',
     description:
-      'Act as a registered game title: report achievements, request season reward grants. Gated at worlds/src/server.ts:747 among others; held by title services (aetherholm, emberkin, nda), never by users.',
+      "Moderation, verification and dispute resolution — an ordinary buyer's token never reaches it. Gated at market/src/server.ts:1337.",
   }),
-  'aetherholm:provision': Object.freeze({
-    service: 'aetherholm',
+  'market:read': Object.freeze({
+    service: 'market',
+    description: 'Read orders and listings for a named subject. Gated at market/src/server.ts:991 and :1002.',
+  }),
+  'market:write': Object.freeze({
+    service: 'market',
     description:
-      'Provision a Private Skerry for a worlds entitlement. Gated at aetherholm/src/server.ts:343; held by worlds alone — the provisioning bridge is the only caller.',
+      'Create and act on collections, listings and orders for a named user. Gated at market/src/server.ts:615 and nine siblings.',
   }),
-  'aetherholm:read': Object.freeze({
-    service: 'aetherholm',
+  'mint:read': Object.freeze({
+    service: 'mint',
+    description: 'Read token orders and deployments. Gated at mint/src/server.ts:443 and :456.',
+  }),
+  'mint:write': Object.freeze({
+    service: 'mint',
     description:
-      'Read seasons, islands and cities service-to-service. Gated at aetherholm/src/server.ts:384 and eight siblings.',
+      'Open and progress token orders for a named user. Gated at mint/src/server.ts:375 and three siblings.',
   }),
-  'billing:grant': Object.freeze({
-    service: 'billing',
-    description: 'Grant or revoke an entitlement.',
+  'nda:write': Object.freeze({
+    service: 'nda',
+    description:
+      'Act for a user the call names in x-user-id; the service lane of subjectOf demands it. Gated at nda/src/server.ts:1003 and :1021.',
   }),
-  'billing:read': Object.freeze({
-    service: 'billing',
-    description: 'Ask whether a subject holds an entitlement. Today no service can ask at all.',
-  }),
-  'pricing:read': Object.freeze({
-    service: 'pricing',
-    description: 'Read a quote or an administered rate.',
-  }),
-  'indexer:read': Object.freeze({
-    service: 'indexer',
-    description: 'Read blocks, transactions, address activity and observed balances.',
+  'notify:read': Object.freeze({
+    service: 'notify',
+    description:
+      "Read a user's notifications and preferences as a service. Gated at notify/src/server.ts:312.",
   }),
   'notify:send': Object.freeze({
     service: 'notify',
@@ -206,6 +322,86 @@ export const SCOPES = Object.freeze({
   'policy:decide': Object.freeze({
     service: 'policy',
     description: 'Submit a decision request and receive allow, deny, challenge or review.',
+  }),
+  'pricing:admin': Object.freeze({
+    service: 'pricing',
+    description:
+      'Administer rates; an operator role passes without it. Gated at pricing/src/server.ts:485.',
+  }),
+  'pricing:read': Object.freeze({
+    service: 'pricing',
+    description: 'Read a quote or an administered rate.',
+  }),
+  'settlement:read': Object.freeze({
+    service: 'settlement',
+    description:
+      'Read quotes, sweeps and settlement state. Gated at settlement/src/server.ts:453 and four siblings.',
+  }),
+  'settlement:register': Object.freeze({
+    service: 'settlement',
+    description:
+      'Register a sweep destination binding — character for character what custody will later compare. Gated at settlement/src/server.ts:730.',
+  }),
+  'studio:read': Object.freeze({
+    service: 'studio',
+    description: 'Read brand kits. Gated at studio/src/server.ts:407 and two siblings.',
+  }),
+  'studio:write': Object.freeze({
+    service: 'studio',
+    description:
+      'Create brand kits and probe the image backend — a probe makes a real, costed image call. Gated at studio/src/server.ts:366 and two siblings.',
+  }),
+  'trade:admin': Object.freeze({
+    service: 'trade',
+    description: 'Operator actions on any bot. Gated at trade/src/server.ts:787 (requireOperator).',
+  }),
+  'trade:read': Object.freeze({
+    service: 'trade',
+    description:
+      'Read bots and backtests for a named subject. Gated at trade/src/server.ts:420 and six siblings.',
+  }),
+  'trade:write': Object.freeze({
+    service: 'trade',
+    description:
+      "Create backtests and act on a named user's bots. Gated at trade/src/server.ts:465, :592 and :651.",
+  }),
+  'wallet:money': Object.freeze({
+    service: 'wallet',
+    description:
+      'Move money: withdrawals and holds. Separated from wallet:write so a caller that manages wallets cannot also spend from them. Gated at wallet/src/server.ts:646 and three siblings.',
+  }),
+  'wallet:provision': Object.freeze({
+    service: 'wallet',
+    description: 'Create a managed wallet and assign a deposit address.',
+  }),
+  'wallet:read': Object.freeze({
+    service: 'wallet',
+    description: 'Read the wallet registry, deposit assignments and withdrawal state.',
+  }),
+  'wallet:write': Object.freeze({
+    service: 'wallet',
+    description:
+      'Create wallets and mutate non-monetary wallet state for a named user. Gated at wallet/src/server.ts:464 and five siblings.',
+  }),
+  'worlds:admin': Object.freeze({
+    service: 'worlds',
+    description:
+      "Register a game title — which says where this service will send a customer's purchase — and the other operator acts. Gated at worlds/src/server.ts:517 and three siblings.",
+  }),
+  'worlds:read': Object.freeze({
+    service: 'worlds',
+    description:
+      'Read player profiles and entitlements service-to-service. Gated at worlds/src/server.ts:555 and four siblings.',
+  }),
+  'worlds:title': Object.freeze({
+    service: 'worlds',
+    description:
+      'Act as a registered game title: report achievements, request season reward grants. Gated at worlds/src/server.ts:747 among others; held by title services (aetherholm, emberkin, nda), never by users.',
+  }),
+  'worlds:write': Object.freeze({
+    service: 'worlds',
+    description:
+      'Write player profiles and grants for a named user. Gated at worlds/src/server.ts:582 and three siblings.',
   }),
 } as const satisfies Readonly<Record<string, ScopeSpec>>)
 
