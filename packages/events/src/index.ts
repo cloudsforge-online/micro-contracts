@@ -994,3 +994,7 @@ export function verifyDelivery(
   }
   return { ok: false, reason: 'mismatch' }
 }
+
+// The operator audit log's view of this registry. A separate module so that adding a topic to
+// `TOPICS` above and deciding whether the audit log carries it are one commit but not one hunk.
+export * from './audit.ts'
