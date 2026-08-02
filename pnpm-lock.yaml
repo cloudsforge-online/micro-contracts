@@ -30,6 +30,8 @@ importers:
         specifier: workspace:^
         version: link:../chain
 
+  packages/worlds: {}
+
 packages:
 
   '@esbuild/aix-ppc64@0.28.1':
