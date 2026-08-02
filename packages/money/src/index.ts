@@ -113,6 +113,9 @@ export type AccountSubject =
   | 'platform'
   | 'custody'
   | 'clearing'
+  | 'platform:engagement-treasury'
+  | `engagement:${string}`
+  | `chain:${string}`
 
 export type ParsedSubject =
   | { readonly kind: 'user'; readonly id: string }
@@ -121,10 +124,25 @@ export type ParsedSubject =
   | { readonly kind: 'platform' }
   | { readonly kind: 'custody' }
   | { readonly kind: 'clearing' }
+  | { readonly kind: 'engagement-treasury' }
+  | { readonly kind: 'engagement'; readonly service: string }
+  | { readonly kind: 'chain'; readonly id: string }
 
 export const PLATFORM: AccountSubject = 'platform'
 export const CUSTODY: AccountSubject = 'custody'
 export const CLEARING: AccountSubject = 'clearing'
+
+/**
+ * The engagement treasury — docs/ecosystem/21 §4, spelled exactly as that document's tree spells
+ * it. A singleton like `platform`, and deliberately NOT a `platform`-purpose variant: the
+ * engagement programme's whole safety argument is that an auditor reconstructs it from the ledger
+ * alone, and a subject that names the programme is what makes `select .. where subject like
+ * 'engagement%' or subject = 'platform:engagement-treasury'` the entire reconstruction query.
+ *
+ * The colon inside a singleton name is safe for the same reason `user:<id>` is: `accountKey`
+ * joins on `|`, never on `:`.
+ */
+export const ENGAGEMENT_TREASURY: AccountSubject = 'platform:engagement-treasury'
 
 const SINGLETON_SUBJECTS = ['platform', 'custody', 'clearing'] as const
 
@@ -161,16 +179,51 @@ export function organisationSubject(id: string): AccountSubject {
   return `organisation:${id}`
 }
 
+/**
+ * A service's engagement account — docs/ecosystem/21 §4: `engagement:<service>`, one per service
+ * the treasury funds, populated only by operator-approved `engagement.transfer` actions in
+ * `micro-admin-api`. The service name obeys the same id rule as every other prefixed subject
+ * (no `:`, no `|`), so `engagement:foresight` parses and `engagement:a:b` is refused.
+ */
+export function engagementSubject(service: string): AccountSubject {
+  assertId('engagement', service)
+  return `engagement:${service}`
+}
+
+/**
+ * A chain's clearing position, as bookkeeping about somebody else's ledger (the chain's).
+ *
+ * `micro-foresight` has posted fee reports against `chain:<id>` since its fee mirror shipped
+ * (foresight/src/ledgerclient.ts, feePostings) — a spelling this grammar refused until 2026-08,
+ * so every such entry died at the ledger's `parseAccountSubject` call inside `ensureAccount`.
+ * Registered here rather than papered over in foresight because the subject is right: an entry
+ * that mirrors an on-chain movement needs a subject that says "this came from outside", and a
+ * chain is the honest owner of that side of the entry.
+ */
+export function chainSubject(id: string): AccountSubject {
+  assertId('chain', id)
+  return `chain:${id}`
+}
+
 export function parseAccountSubject(text: string): ParsedSubject {
   for (const singleton of SINGLETON_SUBJECTS) {
     if (text === singleton) return { kind: singleton }
   }
+  if (text === ENGAGEMENT_TREASURY) return { kind: 'engagement-treasury' }
   const separator = text.indexOf(':')
   const prefix = separator === -1 ? '' : text.slice(0, separator)
   const id = separator === -1 ? '' : text.slice(separator + 1)
   if (prefix === 'user' || prefix === 'community' || prefix === 'organisation') {
     assertId(prefix, id)
     return { kind: prefix, id }
+  }
+  if (prefix === 'engagement') {
+    assertId('engagement', id)
+    return { kind: 'engagement', service: id }
+  }
+  if (prefix === 'chain') {
+    assertId('chain', id)
+    return { kind: 'chain', id }
   }
   throw new RangeError(`not an account subject: ${text}`)
 }

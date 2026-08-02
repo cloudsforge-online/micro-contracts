@@ -16,9 +16,12 @@ import {
   assertBalanced,
   assetDecimals,
   balanceEntry,
+  chainSubject,
   communitySubject,
   compareMoney,
   computeDrift,
+  ENGAGEMENT_TREASURY,
+  engagementSubject,
   formatMoney,
   freezesWithdrawals,
   increasesBalance,
@@ -164,6 +167,43 @@ test('rubbish is not a subject', () => {
   assert.equal(isAccountSubject('admin:1'), false)
   assert.equal(isAccountSubject('platform'), true)
   assert.equal(isAccountSubject('user:'), false)
+})
+
+// The engagement-treasury grammar — docs/ecosystem/21 §4, spelled exactly as the document's tree
+// spells it. These are the account names every engagement Shard moves through, so the spellings
+// are pinned here the way topic names are pinned in contracts-events: a rename is a coordinated
+// release, never a typo.
+test('the engagement treasury and per-service engagement accounts parse — 21 §4', () => {
+  assert.equal(ENGAGEMENT_TREASURY, 'platform:engagement-treasury')
+  assert.deepEqual(parseAccountSubject('platform:engagement-treasury'), {
+    kind: 'engagement-treasury',
+  })
+  assert.deepEqual(parseAccountSubject(engagementSubject('foresight')), {
+    kind: 'engagement',
+    service: 'foresight',
+  })
+  // The doc's six services, every one of them expressible.
+  for (const service of ['foresight', 'market', 'worlds', 'aetherholm', 'emberkin', 'trade']) {
+    assert.equal(isAccountSubject(`engagement:${service}`), true)
+  }
+})
+
+test('an engagement service name obeys the id rule — no separator, no key delimiter, no blank', () => {
+  assert.throws(() => engagementSubject(''), RangeError)
+  assert.throws(() => engagementSubject('a:b'), RangeError)
+  assert.throws(() => engagementSubject('a|b'), RangeError)
+  assert.equal(isAccountSubject('engagement:'), false)
+  // And the treasury spelling is EXACT: 'platform:<anything else>' stays refused, so the
+  // singleton cannot be approximated into a family of platform-prefixed subjects.
+  assert.equal(isAccountSubject('platform:treasury'), false)
+  assert.equal(isAccountSubject('platform:engagement'), false)
+})
+
+test('a chain clearing subject parses — the spelling foresight fee reports already use', () => {
+  assert.deepEqual(parseAccountSubject(chainSubject('ember')), { kind: 'chain', id: 'ember' })
+  assert.equal(isAccountSubject('chain:ember'), true)
+  assert.throws(() => chainSubject('a:b'), RangeError)
+  assert.equal(isAccountSubject('chain:'), false)
 })
 
 // ---------------------------------------------------------------------------
