@@ -160,6 +160,29 @@ export const SCOPES = Object.freeze({
     service: 'custody',
     description: 'Sign a contract deployment paying gas from the platform deployer.',
   }),
+  /* ── The games vertical, first three of many ─────────────────────────────────────────────────
+   * A full audit (2026-08-02) found the estate's services gate on ~30 scopes this registry does
+   * not contain — identity refuses to mint any of them, so most service-to-service surfaces are
+   * unreachable by identity-issued tokens and every suite stayed green because each mints its own
+   * fake principals. The three below are added now with their gate citations because the slice's
+   * title-bridge drill needs them; the remainder land with the per-repo CI rule that makes this
+   * registry provably total against what services actually demand.
+   * ------------------------------------------------------------------------------------------ */
+  'worlds:title': Object.freeze({
+    service: 'worlds',
+    description:
+      'Act as a registered game title: report achievements, request season reward grants. Gated at worlds/src/server.ts:747 among others; held by title services (aetherholm, emberkin, nda), never by users.',
+  }),
+  'aetherholm:provision': Object.freeze({
+    service: 'aetherholm',
+    description:
+      'Provision a Private Skerry for a worlds entitlement. Gated at aetherholm/src/server.ts:343; held by worlds alone — the provisioning bridge is the only caller.',
+  }),
+  'aetherholm:read': Object.freeze({
+    service: 'aetherholm',
+    description:
+      'Read seasons, islands and cities service-to-service. Gated at aetherholm/src/server.ts:384 and eight siblings.',
+  }),
   'billing:grant': Object.freeze({
     service: 'billing',
     description: 'Grant or revoke an entitlement.',

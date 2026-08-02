@@ -34,8 +34,17 @@ const codes = (result: { ok: boolean; errors?: readonly { code: string }[] }) =>
 
 // --- scopes ----------------------------------------------------------------
 
-test('the scope registry is exactly the closed set of AD-17', () => {
+test('the scope registry is a closed, enumerated set — every widening is deliberate', () => {
+  // This test used to claim the list was "exactly the closed set of AD-17". AD-17 says scoped
+  // service tokens and no shared bearer secrets — a principle; it enumerates no scopes. The list
+  // below is the REGISTRY's own inventory, pinned so a scope can only be added by editing this
+  // file in the same commit — which is the property that matters. The 2026-08-02 audit found the
+  // estate's services gate on ~30 scopes this registry lacked (identity therefore could not mint
+  // a token for most service-to-service surfaces, and every suite was green off fake principals);
+  // the games-vertical trio lands here first, the rest with the per-repo totality rule.
   assert.deepEqual([...SCOPE_NAMES].sort(), [
+    'aetherholm:provision',
+    'aetherholm:read',
     'billing:grant',
     'billing:read',
     'custody:sign:deployer',
@@ -50,6 +59,7 @@ test('the scope registry is exactly the closed set of AD-17', () => {
     'pricing:read',
     'wallet:provision',
     'wallet:read',
+    'worlds:title',
   ])
 })
 
