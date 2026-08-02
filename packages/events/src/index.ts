@@ -191,6 +191,7 @@ export type ProducerService =
   | 'trade'
   | 'worlds'
   | 'aetherholm'
+  | 'emberkin'
   | 'nda'
   | 'community'
   | 'devplatform'
@@ -413,6 +414,89 @@ export const TOPICS = Object.freeze({
     keyedBy: 'season_id',
     description:
       'Day 120: the archipelago froze into the chronicle. Carries the chronicle digest and the victors; heraldry consumers subscribe here.',
+  }),
+
+  /* ── worlds — four topics a LIVE producer was already emitting unregistered ─────────────────
+   * The registry contained zero worlds.* topics while worlds/src emitted all four below, which is
+   * the devplatform failure mode this registry's own note warns about: consumers validate
+   * envelopes against this list, so an unregistered topic from a live producer is quarantined as
+   * unclassifiable no matter how correct the delivery is. Found when Aetherholm's phase-2 wave
+   * re-audited producers against the registry.
+   * ------------------------------------------------------------------------------------------ */
+  'worlds.title.registered': Object.freeze({
+    producer: 'worlds',
+    payloadType: 'TitleRegistered',
+    version: '1.0',
+    keyedBy: 'title_id',
+    description: 'An operator registered a game title with the platform, with its capability set.',
+  }),
+  'worlds.reward.granted': Object.freeze({
+    producer: 'worlds',
+    payloadType: 'RewardGranted',
+    version: '1.0',
+    keyedBy: 'reward_id',
+    description:
+      'A season reward paid a player in Shards, with the journal entry and the remaining budget on the event so a nearly-spent alert can be a subscriber rather than a remembered query.',
+  }),
+  'worlds.provision.completed': Object.freeze({
+    producer: 'worlds',
+    payloadType: 'ProvisionCompleted',
+    version: '1.0',
+    keyedBy: 'entitlement_id',
+    description: 'A private-world entitlement was delivered by its title, with the urn.',
+  }),
+  'worlds.provision.failed': Object.freeze({
+    producer: 'worlds',
+    payloadType: 'ProvisionFailed',
+    version: '1.0',
+    keyedBy: 'entitlement_id',
+    description:
+      'A private-world provision ended undeliverable. Carries the entitlement id so a refund can name what it reverses.',
+  }),
+
+  /* ── emberkin — six topics, same finding, and the producer itself was missing from the union ─ */
+  'emberkin.achievement.unlocked': Object.freeze({
+    producer: 'emberkin',
+    payloadType: 'AchievementUnlocked',
+    version: '1.0',
+    keyedBy: 'user_id_and_code',
+    description: 'A player unlocked an achievement, keyed user:code so a replay cannot double it.',
+  }),
+  'emberkin.battle.resolved': Object.freeze({
+    producer: 'emberkin',
+    payloadType: 'BattleResolved',
+    version: '1.0',
+    keyedBy: 'battle_id',
+    description: 'A battle resolved, with outcome and turn count. The player fought it themselves.',
+  }),
+  'emberkin.cosmetic.equipped': Object.freeze({
+    producer: 'emberkin',
+    payloadType: 'CosmeticEquipped',
+    version: '1.0',
+    keyedBy: 'user_id',
+    description: 'A player equipped a cosmetic entitlement into a slot.',
+  }),
+  'emberkin.save.started': Object.freeze({
+    producer: 'emberkin',
+    payloadType: 'SaveStarted',
+    version: '1.0',
+    keyedBy: 'user_id',
+    description: 'A player began a campaign, with starter and region.',
+  }),
+  'emberkin.season.started': Object.freeze({
+    producer: 'emberkin',
+    payloadType: 'SeasonStarted',
+    version: '1.0',
+    keyedBy: 'season_id',
+    description: 'A season opened for the title. A world event with no individual subject.',
+  }),
+  'emberkin.reward.granted': Object.freeze({
+    producer: 'emberkin',
+    payloadType: 'RewardGranted',
+    version: '1.0',
+    keyedBy: 'idempotency_key',
+    description:
+      'A season reward paid a player in Shards, keyed by its idempotency key, with the journal entry on the event.',
   }),
 } as const satisfies Readonly<Record<string, TopicSpec>>)
 
