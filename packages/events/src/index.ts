@@ -5,8 +5,15 @@
  * ForgeMint's client polls for a deployment result every four seconds because nothing tells it.
  * A user learns a deposit landed by refreshing. An entitlement is granted and the world it paid
  * for is never provisioned, because the service that would provision it is never told. A private
- * key leaves the platform accompanied by a single log line. `identity.user.deleted` has no
- * subscriber anywhere, which is why there is no GDPR erasure path at all.
+ * key leaves the platform accompanied by a single log line.
+ *
+ * `identity.user.deleted` HAD no subscriber anywhere — this header said so for the whole life of
+ * the estate, and it was why there was no GDPR erasure path at all. That sentence is now false:
+ * `activity` erases the subject on receipt (its inbox row is the acknowledgement), and the
+ * composed slice DRIVES the path — account deleted, tombstone event written in the same
+ * transaction, delivered over the signed bus, records gone — as a standing check in
+ * `deploy/scripts/slice-verify.sh`. Subscriptions are deploy configuration; the remaining work is
+ * wiring the other holders of user data (notify above all) into the same topic at deploy time.
  *
  * The transport is deliberately unremarkable — a Postgres `outbox` written in the same
  * transaction as the state change, a leased relay job, an HTTP POST, a consumer `inbox` unique on
