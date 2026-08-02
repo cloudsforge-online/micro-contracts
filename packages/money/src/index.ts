@@ -191,6 +191,62 @@ export function engagementSubject(service: string): AccountSubject {
 }
 
 /**
+ * The one entry kind an engagement grant is posted under — docs/ecosystem/21 §5.
+ *
+ * **`treasury_spend`, and it is not a compromise.** The ledger's kind vocabulary is CLOSED
+ * (`journal_entries_kind_chk`, ledger/src/migrations.ts:181) precisely so that "how much did the
+ * engagement programme spend" is answerable by counting rather than by grepping descriptions —
+ * and an engagement account IS a treasury (purpose `treasury`, type `equity`), so a grant out of
+ * it is literally a treasury spend. Naming it here, once, is what stops `market`, `worlds` and
+ * `trade` picking three different kinds for one programme and making that count impossible.
+ *
+ * No new kind was added for this, deliberately: the vocabulary is a CHECK constraint in
+ * `micro-ledger`'s schema, so a fourth service inventing `engagement_grant` would not merely be
+ * inconsistent — every entry it posted would be refused at the constraint. `micro-foresight`
+ * shipped exactly that defect with `foresight.settlement_fee` and posted nothing for months.
+ */
+export const ENGAGEMENT_GRANT_KIND: EntryKind = 'treasury_spend'
+
+/**
+ * An account named the way every service's ledger CLIENT names one on the wire.
+ *
+ * Deliberately NOT `Posting` (which is `accountId`-shaped, the RESOLVED form the ledger uses
+ * internally): a grant's whole point is that the engagement account may not exist yet and is
+ * created idempotently on first use, which the wire's inline `account` block is what enables.
+ */
+export interface EngagementAccountRef extends AccountIdentity {
+  readonly type: AccountType
+}
+
+/**
+ * The DEBIT side of every engagement grant — 21 §4: "Every grant a service pays out references
+ * its engagement account as the debit side. An auditor reconstructs the entire programme from
+ * the ledger alone."
+ *
+ * That sentence is only true if all four fields are spelled identically by every service, because
+ * the ledger's account key is `(subject, asset_code, purpose)` and a second spelling is a second
+ * account — which is the quietest possible way to split one programme's ledger in half. So the
+ * spelling lives here and nowhere else.
+ *
+ * `equity` under `treasury`: the programme is the platform's own money earmarked, not revenue and
+ * not a user liability. It matters at the ledger's overdraft trigger — an `equity` account is NOT
+ * overdraft-exempt (ledger/src/migrations.ts, `ledger_assert_no_overdraft`), so a service that
+ * tries to grant more than its engagement account holds is refused by the ledger rather than
+ * quietly going negative. An engagement account cannot be spent before it is funded.
+ */
+export function engagementAccount(
+  service: string,
+  assetCode: LedgerAssetCode = 'SHARD',
+): EngagementAccountRef {
+  return {
+    subject: engagementSubject(service),
+    assetCode,
+    purpose: 'treasury',
+    type: 'equity',
+  }
+}
+
+/**
  * A chain's clearing position, as bookkeeping about somebody else's ledger (the chain's).
  *
  * `micro-foresight` has posted fee reports against `chain:<id>` since its fee mirror shipped

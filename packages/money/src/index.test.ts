@@ -20,7 +20,9 @@ import {
   communitySubject,
   compareMoney,
   computeDrift,
+  ENGAGEMENT_GRANT_KIND,
   ENGAGEMENT_TREASURY,
+  engagementAccount,
   engagementSubject,
   formatMoney,
   freezesWithdrawals,
@@ -197,6 +199,37 @@ test('an engagement service name obeys the id rule — no separator, no key deli
   // singleton cannot be approximated into a family of platform-prefixed subjects.
   assert.equal(isAccountSubject('platform:treasury'), false)
   assert.equal(isAccountSubject('platform:engagement'), false)
+})
+
+// The grant primitive — 21 §4/§5. These are the spellings three services must agree on, so they
+// are pinned here rather than trusted to three code reviews.
+test('an engagement grant debits the service treasury, spelled once for every service', () => {
+  assert.deepEqual(engagementAccount('market'), {
+    subject: 'engagement:market',
+    assetCode: 'SHARD',
+    purpose: 'treasury',
+    type: 'equity',
+  })
+  // `equity` is load-bearing: the ledger's overdraft trigger exempts `clearing` and `suspense`,
+  // NOT `equity` — so an engagement account cannot be spent before it is funded.
+  assert.equal(engagementAccount('worlds').type, 'equity')
+  assert.equal(engagementAccount('worlds').purpose, 'treasury')
+  // The account key is (subject, assetCode, purpose), so a second spelling would be a second
+  // account and would split one programme's ledger in half.
+  assert.equal(
+    accountKey(engagementAccount('market')),
+    accountKey({ subject: 'engagement:market', assetCode: 'SHARD', purpose: 'treasury' }),
+  )
+  assert.throws(() => engagementAccount('a:b'), RangeError)
+})
+
+test('the grant kind is one the LEDGER will actually accept', () => {
+  // The kind vocabulary is a CHECK constraint in micro-ledger's schema. foresight shipped
+  // `foresight.settlement_fee`, which was not in it, and posted nothing for months — so this
+  // asserts membership rather than merely spelling.
+  assert.equal(ENGAGEMENT_GRANT_KIND, 'treasury_spend')
+  assert.ok(isEntryKind(ENGAGEMENT_GRANT_KIND), 'the grant kind must be in the closed vocabulary')
+  assert.ok(ENTRY_KINDS.includes(ENGAGEMENT_GRANT_KIND))
 })
 
 test('a chain clearing subject parses — the spelling foresight fee reports already use', () => {
