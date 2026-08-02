@@ -11,13 +11,16 @@ import {
   grantsScope,
   hasRole,
   hasScope,
+  isDeprecatedScope,
   isScope,
   isServiceClaims,
   isUserClaims,
   knownScopes,
+  LIVE_SCOPE_NAMES,
   normaliseEmail,
   normaliseHandle,
   ownersOf,
+  scopeSpec,
   truncateIp,
   validateEmail,
   validateHandle,
@@ -44,6 +47,11 @@ test('the scope registry is a closed, enumerated set — every widening is delib
   // all 39 are registered below with their gate citations, and micro-org's service-ci.yml now
   // derives every repository's demands and fails its build if one is missing here — so this list
   // grows in the same commit as the gate that needs it, or that repository's CI goes red.
+  //
+  // It only ever GROWS: this package is additive-only (AD-02) and the compat job refuses a removal,
+  // because narrowing `Scope` narrows every union built from it in twenty-two consumers. A scope
+  // the estate turns out not to demand is therefore marked `deprecated` and drops out of
+  // `LIVE_SCOPE_NAMES` — see the two below — rather than disappearing from this list.
   assert.deepEqual([...SCOPE_NAMES].sort(), [
     'admin:audit:write',
     'admin:read',
@@ -82,6 +90,7 @@ test('the scope registry is a closed, enumerated set — every widening is delib
     'mint:write',
     'nda:write',
     'notify:read',
+    'notify:send',
     'policy:decide',
     'pricing:admin',
     'pricing:read',
@@ -93,6 +102,7 @@ test('the scope registry is a closed, enumerated set — every widening is delib
     'trade:read',
     'trade:write',
     'wallet:money',
+    'wallet:provision',
     'wallet:read',
     'wallet:write',
     'worlds:admin',
@@ -116,17 +126,38 @@ test('the scope registry is a closed, enumerated set — every widening is delib
  * be granted, audited and rotated while opening nothing — and the next reader takes it as evidence
  * that a capability exists somewhere.
  */
-test('the two scopes no gate in the estate demands stay deleted', () => {
+test('the two scopes no gate in the estate demands are marked dead, not granted', () => {
   // notify/src/server.ts:417 — /ingest is MAC-only. The signature over the raw bytes IS the
-  // authentication; no bearer is read, so no scope can gate it. notify had already deleted
-  // `notify:ingest` on this reasoning and recorded it at notify/src/server.ts:99.
-  assert.equal(isScope('notify:send'), false)
+  // authentication; no bearer is read, so no scope can gate it. notify had already deleted its own
+  // `notify:ingest` constant on this reasoning and recorded it at notify/src/server.ts:99.
+  assert.equal(isDeprecatedScope('notify:send'), true)
   // wallet/src/server.ts:132 — read / write / money, three authorities, deliberately. Creating a
   // wallet (:464) and assigning a deposit address (:605) are both `wallet:write`.
-  assert.equal(isScope('wallet:provision'), false)
-  // And the two that DO gate those surfaces are still here, so this is not passing by amputation.
-  assert.equal(isScope('notify:read'), true)
-  assert.equal(isScope('wallet:write'), true)
+  assert.equal(isDeprecatedScope('wallet:provision'), true)
+
+  // Neither is a scope to grant...
+  assert.equal(LIVE_SCOPE_NAMES.includes('notify:send'), false)
+  assert.equal(LIVE_SCOPE_NAMES.includes('wallet:provision'), false)
+  // ...and both still resolve, because AD-02 forbids narrowing a published union. A consumer
+  // pinned to an older copy of this package keeps compiling; it simply grants nothing.
+  assert.equal(isScope('notify:send'), true)
+  assert.equal(isScope('wallet:provision'), true)
+
+  // The gates those surfaces really use are live, so this is not passing by amputation.
+  assert.equal(isDeprecatedScope('notify:read'), false)
+  assert.equal(isDeprecatedScope('wallet:write'), false)
+  assert.equal(LIVE_SCOPE_NAMES.length, SCOPE_NAMES.length - 2)
+})
+
+test('a dead scope says why, at the length of a decision rather than a label', () => {
+  for (const scope of SCOPE_NAMES) {
+    if (!isDeprecatedScope(scope)) continue
+    const reason = scopeSpec(scope).deprecated ?? ''
+    assert.ok(
+      reason.length > 80,
+      `${scope} is deprecated without saying what gate replaced it — that is a hole, not a decision`,
+    )
+  }
 })
 
 test('every scope names the service that enforces it and says what it permits', () => {

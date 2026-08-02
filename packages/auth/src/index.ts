@@ -113,6 +113,19 @@ export interface ScopeSpec {
   /** The service that enforces it. Only that service should ever check for this scope. */
   readonly service: string
   readonly description: string
+  /**
+   * Why this scope is dead, when it is. Present means **no gate in the estate demands it**, so a
+   * token carrying it can open nothing, and none should be written for it without reviving the
+   * entry deliberately.
+   *
+   * It is a field rather than a deletion because AD-02 governs this package: a removed key
+   * narrows `Scope` and every union built from it, and the compat job refuses that — a major
+   * version of a contract package is a coordinated release across twenty-two consumers, which
+   * this topology cannot do. So a dead scope is marked, not amputated: `LIVE_SCOPE_NAMES` is the
+   * list to grant from, `SCOPE_NAMES` stays the compatible set, and the next reader is told the
+   * entry is evidence of nothing.
+   */
+  readonly deprecated?: string
 }
 
 /**
@@ -315,15 +328,12 @@ export const SCOPES = Object.freeze({
     description:
       "Read a user's notifications and preferences as a service. Gated at notify/src/server.ts:312.",
   }),
-  // `notify:send` was here and is deleted. Nothing in the estate enqueues a notification with a
-  // bearer token: notify's inbound surface is `/ingest`, which the §3.3p repair made MAC-ONLY —
-  // the signature over the raw bytes IS the authentication and no token is read at all
-  // (notify/src/server.ts:417) — plus `/notifications` (notify:read), `/preferences` (the user's
-  // own) and `/admin/*` (operator role). notify itself already deleted `notify:ingest` for exactly
-  // this reason and wrote down why (notify/src/server.ts:99): "a dead scope constant is worse than
-  // none: it reads as a capability", and registering one lets identity mint a credential that
-  // opens nothing. If notify ever grows a service-to-service send route, the scope comes back in
-  // the same commit as its gate.
+  'notify:send': Object.freeze({
+    service: 'notify',
+    description: 'Enqueue a notification or a developer webhook delivery.',
+    deprecated:
+      'No gate demands it and none can. Nothing in the estate enqueues a notification with a bearer token: notify\'s inbound surface is /ingest, which the §3.3p repair made MAC-ONLY — the signature over the raw bytes IS the authentication and no token is read (notify/src/server.ts:417) — plus /notifications (notify:read), /preferences (the user\'s own) and /admin/* (operator role). notify had already deleted its own `notify:ingest` constant on this reasoning and wrote down why at notify/src/server.ts:99: "a dead scope constant is worse than none: it reads as a capability". If a service-to-service send route is ever built, revive this in the same commit as its gate.',
+  }),
   'policy:decide': Object.freeze({
     service: 'policy',
     description: 'Submit a decision request and receive allow, deny, challenge or review.',
@@ -375,12 +385,12 @@ export const SCOPES = Object.freeze({
     description:
       'Move money: withdrawals and holds. Separated from wallet:write so a caller that manages wallets cannot also spend from them. Gated at wallet/src/server.ts:646 and three siblings.',
   }),
-  // `wallet:provision` was here and is deleted. Both acts it named are gated on `wallet:write`
-  // today — creating a wallet at wallet/src/server.ts:464 and assigning a deposit address at
-  // wallet/src/server.ts:605 — and wallet states its authority split in one place
-  // (wallet/src/server.ts:132): three scopes, read / write / money, "because reading a portfolio,
-  // registering a wallet and moving money are three different authorities". A fourth that no gate
-  // demands is not a tighter split, it is a credential identity can mint which opens nothing.
+  'wallet:provision': Object.freeze({
+    service: 'wallet',
+    description: 'Create a managed wallet and assign a deposit address.',
+    deprecated:
+      'No gate demands it. Both acts it names are gated on wallet:write today — creating a wallet at wallet/src/server.ts:464, assigning a deposit address at wallet/src/server.ts:605 — and wallet states its authority split in one place (wallet/src/server.ts:132): three scopes, read / write / money, "because reading a portfolio, registering a wallet and moving money are three different authorities". A fourth nothing demands is not a tighter split; it is a credential identity can mint that opens nothing.',
+  }),
   'wallet:read': Object.freeze({
     service: 'wallet',
     description: 'Read the wallet registry, deposit assignments and withdrawal state.',
@@ -423,6 +433,31 @@ export function isScope(value: string): value is Scope {
 export function scopeSpec(scope: Scope): ScopeSpec {
   return SCOPES[scope]
 }
+
+/**
+ * A scope that is registered but which no gate in the estate demands.
+ *
+ * `service-ci.yml` proves **demands ⊆ registry** one repository at a time: a gate asking for an
+ * unregistered scope fails that build. Nothing proves the other direction, because no checkout
+ * sees every gate — so a scope that was registered speculatively, or whose gate was later
+ * rewritten to demand a different one, stays here looking exactly like a live capability. The
+ * 2026-08-03 audit found two, and the inventory pin in `index.test.ts` was protecting rather than
+ * catching them, having been written from this registry rather than from the gates.
+ */
+export function isDeprecatedScope(scope: Scope): boolean {
+  return scopeSpec(scope).deprecated !== undefined
+}
+
+/**
+ * The scopes worth granting: every registered one that some gate actually demands.
+ *
+ * This, not `SCOPE_NAMES`, is the list identity should mint from and an operator should read.
+ * `SCOPE_NAMES` remains every key ever registered, because narrowing it would narrow `Scope` and
+ * every union built on it — the additive-only rule this package lives under (AD-02).
+ */
+export const LIVE_SCOPE_NAMES: readonly Scope[] = Object.freeze(
+  SCOPE_NAMES.filter((scope) => !isDeprecatedScope(scope)),
+)
 
 /**
  * Exact match only. There is no `custody:*`, no `ledger:write` covering `ledger:post`, and no
