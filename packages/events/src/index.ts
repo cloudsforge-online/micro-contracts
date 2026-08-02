@@ -677,7 +677,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
  * two different pairs can never collide into one key.
  */
 export function inboxKey(event: Pick<EventEnvelope, 'topic' | 'id'>): string {
-  return `${event.topic} ${event.id}`
+  return `${event.topic}\u0000${event.id}`
 }
 
 /**
@@ -692,7 +692,7 @@ export function inboxKey(event: Pick<EventEnvelope, 'topic' | 'id'>): string {
 export function relayShard(topic: string, key: string, shards: number): number {
   if (!Number.isInteger(shards) || shards < 1) throw new RangeError('shards must be >= 1')
   let hash = 0x811c9dc5
-  const input = `${topic} ${key}`
+  const input = `${topic}\u0000${key}`
   for (let i = 0; i < input.length; i += 1) {
     hash ^= input.charCodeAt(i)
     hash = Math.imul(hash, 0x01000193) >>> 0
