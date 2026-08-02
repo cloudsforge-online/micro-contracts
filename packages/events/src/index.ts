@@ -250,6 +250,24 @@ export const TOPICS = Object.freeze({
     keyedBy: 'user_id',
     description: 'FIRST. A sign-in, with device and truncated IP prefix. Feeds new-device alerts.',
   }),
+  /**
+   * The other half of `identity.session.created`, and the topic that carries a password change.
+   *
+   * Registered from the verbatim spec identity left in `identity/src/topics.ts`
+   * (`AWAITING_REGISTRATION`), which it could not land itself. `reason` is a FIELD, not a
+   * discriminator: `signed_out`, `signed_out_everywhere`, `password_changed`, `password_reset` and
+   * the stolen-token family burn all carry the same three payload fields. That is what makes this
+   * registerable at all, and it is the exact distinction `identity.mfa.changed` failed — one name
+   * over four different shapes, which a registry giving each topic one `payloadType` cannot hold.
+   */
+  'identity.session.revoked': Object.freeze({
+    producer: 'identity',
+    payloadType: 'SessionRevoked',
+    version: '1.0',
+    keyedBy: 'session_id',
+    description:
+      'A session was ended, carrying the reason. The other half of identity.session.created.',
+  }),
   'identity.device.added': Object.freeze({
     producer: 'identity',
     payloadType: 'DeviceAdded',
@@ -264,6 +282,20 @@ export const TOPICS = Object.freeze({
     keyedBy: 'user_id',
     description: 'A second factor was revoked, flagging whether it was the last active one.',
   }),
+  /**
+   * Emitted at `identity/src/mfa.ts:563` (activation, and recovery-code regeneration) since the
+   * `identity.mfa.changed` split, and mapped by `notify` since its catalogue was written — so the
+   * consumer existed for the whole life of the service and could never fire, because no registry
+   * named the topic. One payload shape, `MfaFactorAdded`, exactly as `MfaFactorRemoved` is.
+   */
+  'identity.mfa.added': Object.freeze({
+    producer: 'identity',
+    payloadType: 'MfaFactorAdded',
+    version: '1.0',
+    keyedBy: 'user_id',
+    description:
+      'A second factor was activated, flagging whether it replaced an existing factor of the same kind.',
+  }),
   'ledger.entry.posted': Object.freeze({
     producer: 'ledger',
     payloadType: 'EntryPosted',
@@ -277,6 +309,23 @@ export const TOPICS = Object.freeze({
     version: '1.0',
     keyedBy: 'chain:network',
     description: 'Ledger custody total against indexer-observed total. Drift freezes withdrawals.',
+  }),
+  /**
+   * A live producer emitted this unregistered for the life of the service.
+   *
+   * `wallet/src/wallets.ts:214` writes it in the same transaction as the row, keyed by the wallet
+   * id (`wallet/src/outbox.ts:49`), and `notify` has held a rule for it since its catalogue was
+   * written. Same finding as the worlds and emberkin waves above: consumers validate envelopes
+   * against this list, so an unregistered topic from a live producer is quarantined as
+   * unclassifiable however correct the delivery is.
+   */
+  'wallet.wallet.created': Object.freeze({
+    producer: 'wallet',
+    payloadType: 'WalletCreated',
+    version: '1.0',
+    keyedBy: 'wallet_id',
+    description:
+      'A wallet was registered for a user — custodial or external — with its chain, network and address.',
   }),
   'wallet.deposit.confirmed': Object.freeze({
     producer: 'wallet',
@@ -354,6 +403,31 @@ export const TOPICS = Object.freeze({
     version: '1.0',
     keyedBy: 'community_id',
     description: 'A passed proposal cleared its timelock and executed. Treasury spends land here.',
+  }),
+  /**
+   * Two more topics a live producer was already emitting unregistered — the same finding as worlds
+   * and wallet above, found by reconciling `notify`'s rule table against this registry.
+   *
+   * Both are keyed by the PROPOSAL, not the community: `community/src/jobs.ts:221` and
+   * `community/src/votes.ts:227` both pass the proposal id as the key, and the key is the ordering
+   * partition, so it is contract rather than a producer's private choice. Note that
+   * `community.proposal.executed` above is keyed by `community_id` and that difference is real —
+   * a consumer that assumed one keying for the family would mis-order the other two.
+   */
+  'community.proposal.opened': Object.freeze({
+    producer: 'community',
+    payloadType: 'ProposalOpened',
+    version: '1.0',
+    keyedBy: 'proposal_id',
+    description: 'A proposal left discussion and its voting window is open. A vote nobody saw is a vote nobody could cast.',
+  }),
+  'community.vote.cast': Object.freeze({
+    producer: 'community',
+    payloadType: 'VoteCast',
+    version: '1.0',
+    keyedBy: 'proposal_id',
+    description:
+      'A vote was recorded, with the choice and how many subjects it counted for. Carries no individual weights: a per-delegator weight on the bus is a wallet-size disclosure.',
   }),
   // Aetherholm, the third Forge Worlds title (docs/ecosystem/20-aetherholm.md). Registered
   // BEFORE anything subscribes, because an unregistered topic is the devplatform lesson:

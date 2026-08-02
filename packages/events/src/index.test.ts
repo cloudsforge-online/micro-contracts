@@ -66,6 +66,80 @@ test('the eight first events of 02 section 5 all exist', () => {
   }
 })
 
+/**
+ * The five topics live producers were emitting while this registry did not name them.
+ *
+ * Each line cites the emit site that decided it. This is the direction that fails silently in
+ * production: the producer writes, signs and delivers the event, and every consumer refuses it
+ * with "not in this registry" — `activity` cannot even reference the topic, because its classifier
+ * table is `satisfies Record<TopicName, _>`. Nothing logs a defect; the fact simply never lands.
+ */
+test('the topics a producer already emits are named here', () => {
+  for (const [name, emitSite] of [
+    ['identity.session.revoked', 'identity/src/sessions.ts:395'],
+    ['identity.mfa.added', 'identity/src/mfa.ts:563'],
+    ['wallet.wallet.created', 'wallet/src/wallets.ts:214'],
+    ['community.proposal.opened', 'community/src/jobs.ts:221'],
+    ['community.vote.cast', 'community/src/votes.ts:227'],
+  ] as const) {
+    assert.equal(isRegisteredTopic(name), true, `${name} is emitted at ${emitSite} and unregistered`)
+  }
+})
+
+/**
+ * The inventory, pinned.
+ *
+ * The same property the scope registry buys in `packages/auth`: a topic can be added or removed
+ * only by editing this list in the same commit, so no wave of registrations lands without a reader
+ * seeing the whole set change. It is also the one place that states, in one screen, what the bus
+ * carries — the question every producer/consumer audit in this estate has started by asking.
+ */
+test('the registry is an enumerated inventory — every addition is deliberate', () => {
+  assert.deepEqual([...TOPIC_NAMES].sort(), [
+    'aetherholm.battle.resolved',
+    'aetherholm.building.completed',
+    'aetherholm.city.founded',
+    'aetherholm.research.completed',
+    'aetherholm.season.opened',
+    'aetherholm.season.sealed',
+    'aetherholm.skerry.provisioned',
+    'aetherholm.spire.captured',
+    'billing.entitlement.granted',
+    'billing.entitlement.revoked',
+    'community.proposal.executed',
+    'community.proposal.opened',
+    'community.vote.cast',
+    'custody.export.requested',
+    'custody.key.exported',
+    'emberkin.achievement.unlocked',
+    'emberkin.battle.resolved',
+    'emberkin.cosmetic.equipped',
+    'emberkin.reward.granted',
+    'emberkin.save.started',
+    'emberkin.season.started',
+    'identity.device.added',
+    'identity.mfa.added',
+    'identity.mfa.removed',
+    'identity.session.created',
+    'identity.session.revoked',
+    'identity.user.deleted',
+    'identity.user.registered',
+    'ledger.entry.posted',
+    'ledger.reconciliation.completed',
+    'market.listing.sold',
+    'mint.deploy.confirmed',
+    'settlement.withdrawal.completed',
+    'settlement.withdrawal.stuck',
+    'wallet.deposit.confirmed',
+    'wallet.wallet.created',
+    'wallet.withdrawal.requested',
+    'worlds.provision.completed',
+    'worlds.provision.failed',
+    'worlds.reward.granted',
+    'worlds.title.registered',
+  ])
+})
+
 test('every topic declares what its ordering key holds', () => {
   for (const name of TOPIC_NAMES) {
     assert.notEqual(TOPICS[name].keyedBy, '', `${name} does not say what it is keyed by`)
