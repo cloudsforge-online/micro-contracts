@@ -386,6 +386,34 @@ export const TOPICS = Object.freeze({
     keyedBy: 'entitlement_id',
     description: 'The title contract delivered a Private Skerry for a billing entitlement.',
   }),
+  // Aetherholm phase 2: the moving parts. Same registered-before-anything-subscribes rule as
+  // the five above. NOTE the keying: none of these is keyed by user_id, and battle.resolved
+  // carries TWO users — the payload names attacker_user_id and defender_user_id separately, and
+  // a consumer that guesses "the user" from key or actor attributes the raid to the raider.
+  'aetherholm.battle.resolved': Object.freeze({
+    producer: 'aetherholm',
+    payloadType: 'BattleResolved',
+    version: '1.0',
+    keyedBy: 'battle_id',
+    description:
+      'A raid or siege resolved deterministically; the payload carries the report digest, both parties and the loot.',
+  }),
+  'aetherholm.spire.captured': Object.freeze({
+    producer: 'aetherholm',
+    payloadType: 'SpireCaptured',
+    version: '1.0',
+    keyedBy: 'island_id',
+    description:
+      'At season seal, who held one Aether Spire — an alliance or a lone player, with every member user id aboard the payload.',
+  }),
+  'aetherholm.season.sealed': Object.freeze({
+    producer: 'aetherholm',
+    payloadType: 'SeasonSealed',
+    version: '1.0',
+    keyedBy: 'season_id',
+    description:
+      'Day 120: the archipelago froze into the chronicle. Carries the chronicle digest and the victors; heraldry consumers subscribe here.',
+  }),
 } as const satisfies Readonly<Record<string, TopicSpec>>)
 
 export type TopicName = keyof typeof TOPICS
