@@ -29,6 +29,20 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
+      # THIS JOB IS NAMED "Typecheck, test, build" AND HAD NO BUILD STEP, which is the same class of
+      # defect as everything else the estate has been unpicking: a name asserting work that never
+      # happened. micro-ui carried the identical one and closed it.
+      #
+      # It is not a formality here. Every package declares `prepack: pnpm build`, so
+      # `tsconfig.build.json` runs for the first time at PUBLISH — a config no job had ever
+      # executed, in the repository whose packages five services resolve through `link:`. It differs
+      # from `pnpm typecheck` in the ways that break emit rather than checking: `noEmit: false`,
+      # `outDir`, and a `rootDir` that fails the build outright if a source file is added outside
+      # `src/`. A broken one surfaces as a failed release, which is the worst moment to find it.
+      #
+      # `dist/` is gitignored and nothing resolves to it — `exports` points at `./src/index.ts` —
+      # so this step proves the artefact COMPILES and deliberately claims nothing more.
+      - run: pnpm build
 
   # A contract change that breaks a consumer must fail HERE, in the repo that owns the contract,
   # not in the first consumer to upgrade. The checker itself lives in micro-org so that one
