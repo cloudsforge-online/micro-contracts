@@ -432,18 +432,23 @@ export const TOPICS = Object.freeze({
    * aetherholm block above: an unregistered topic from a live producer is quarantined as
    * unclassifiable however correct the delivery is.
    *
-   * **KEYED BY THE DEPOSIT ADDRESS, WHICH IS NOT WHAT THE EMIT SITE PASSES TODAY.**
-   * `sweeps.ts:476` keys it `row.id` — settlement's own outbound-transaction surrogate — and that is
-   * the only member of this family to do so: `confirmedEvents`, `failedEvents` and
-   * `withdrawal.completed` all key by `row.sourceRef`, the aggregate the fact is ABOUT. An outbound
-   * row id is unique per event, so keying by it means this topic has no ordering at all, while the
-   * one sequence that genuinely exists — successive sweeps of one address, each decrementing that
-   * address's observed balance (`sweeps.ts:431`) — is scattered across partitions. That is the
-   * `identity.session.revoked` mistake in its ordering form: keyed by the mechanism rather than the
-   * subject. `row.sourceRef` is the sweep source id, set on every sweep at `sweeps.ts:394` and
-   * already on the payload as `sweepSourceId`, so the change is `key: row.sourceRef` and nothing
-   * else. Fixed here rather than after adoption because a key is frozen the moment a consumer reads
-   * it, and today there is none.
+   * **Keyed by the sweep source, and WHY is the part worth keeping.** `key` is the ordering
+   * partition: two sweeps of one deposit address must be ordered against each other, each
+   * decrementing that address's observed balance, while two sweeps of different addresses have no
+   * ordering relationship at all. Keyed by settlement's outbound-row surrogate — which is unique
+   * per event — every sweep would be its own partition and the ordering guarantee would say
+   * nothing. That is the `identity.session.revoked` mistake in its ordering form: keyed by the
+   * mechanism rather than the subject.
+   *
+   * This paragraph used to end with an INSTRUCTION — "the emit site passes `row.id`; the change is
+   * `key: row.sourceRef`" — naming a line in another repository. Settlement made that change when
+   * this spec was registered and the instruction became a lie that read like a task, which is the
+   * exact shape of stale documentation this estate keeps being bitten by. So it is stated as a
+   * property instead, and the property is asserted: `index.test.ts` pins this `keyedBy` against
+   * being quietly reverted here, and the half no checkout of THIS repository can answer — does the
+   * producer still pass what the spec says? — is answered where both halves exist, by `micro-org`'s
+   * `tools/estate-topics.mjs`, which clones every producer and reconciles emit sites against this
+   * registry. A line number in a sibling repo is not evidence; a check that runs is.
    */
   'settlement.sweep.completed': Object.freeze({
     producer: 'settlement',
@@ -677,6 +682,60 @@ export const TOPICS = Object.freeze({
     keyedBy: 'idempotency_key',
     description:
       'A season reward paid a player in Shards, keyed by its idempotency key, with the journal entry on the event.',
+  }),
+
+  /* ── three adopted from producer quarantines, VERBATIM ─────────────────────────────────────
+   * Each of the three below existed twice before this commit: once in the producing service's own
+   * `AWAITING_REGISTRATION` and once in `notify/src/topics.ts`, where notify copied the producer's
+   * spec rather than writing a second one. Both copies agree field for field with what is
+   * registered here, so this is a paste and not a fresh design, and there was never a moment at
+   * which two repositories proposed two different contracts for one topic.
+   *
+   * Two properties were checked against the PRODUCER'S SOURCE before adopting, because the spec is
+   * the thing being adopted and a spec cannot vouch for itself:
+   *
+   *   - **One payload shape each.** This is the `identity.mfa.changed` test: that name carried a
+   *     four-value discriminator over four different shapes and was unregisterable by
+   *     construction, because a `TopicSpec` gives a topic exactly one `payloadType`. Each of these
+   *     three has exactly one emit site with exactly one shape —
+   *     `trade/src/bots.ts:614` (`{ botId }`), `devplatform/src/apikeys.ts:272` (`emitKeyIssued`,
+   *     the only caller path being `devplatform/src/server.ts:911`) and
+   *     `devplatform/src/apikeys.ts:357` (`emitKeyRevoked`, called from `server.ts:965` and
+   *     `server.ts:1527` with the SAME payload builder and only the actor differing, which is a
+   *     field and not a discriminator).
+   *
+   *   - **`keyedBy` is what the producer really passes**, read off the emit site rather than taken
+   *     from the spec. This is the `custody` lesson: both ceremony topics were registered
+   *     `keyedBy: 'user_id'` while the emit sites passed the ADDRESS, and `activity` reads the
+   *     envelope key AS the user id, so every export event was filed against a user that does not
+   *     exist. Verified here: `bots.ts:614` passes `bot.id`, and both `apikeys.ts` emitters pass
+   *     `key.id` — matching `bot_id`, `key_id` and `key_id` below.
+   *
+   * Landing these makes `adoptedProposals()` non-empty in `micro-trade`, `micro-devplatform` and
+   * `micro-notify`, whose suites now fail until the matching quarantine entries are deleted. That
+   * is the self-emptying quarantine working, not a regression this commit introduced.
+   * ------------------------------------------------------------------------------------------ */
+  'trade.bot.paused': Object.freeze({
+    producer: 'trade',
+    payloadType: 'BotPaused',
+    version: '1.0',
+    keyedBy: 'bot_id',
+    description: 'A bot stopped trading.',
+  }),
+  'devplatform.key.issued': Object.freeze({
+    producer: 'devplatform',
+    payloadType: 'ApiKeyIssued',
+    version: '1.0',
+    keyedBy: 'key_id',
+    description: 'An API key was issued for a project, with its scopes and prefix.',
+  }),
+  'devplatform.key.revoked': Object.freeze({
+    producer: 'devplatform',
+    payloadType: 'ApiKeyRevoked',
+    version: '1.0',
+    keyedBy: 'key_id',
+    description:
+      'An API key was revoked. Every cache holding a verification result for it must drop it.',
   }),
 } as const satisfies Readonly<Record<string, TopicSpec>>)
 

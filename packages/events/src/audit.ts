@@ -203,6 +203,34 @@ export const TOPIC_AUDIT = Object.freeze({
   'emberkin.cosmetic.equipped': { audited: false, why: SIMULATION('a cosmetic being equipped') },
   'emberkin.save.started': { audited: false, why: SIMULATION('a save starting') },
   'emberkin.season.started': { audited: false, why: SIMULATION('a season starting') },
+
+  /* ---------------------------------------------------------------- credentials that act as a user */
+  // An API key is a credential with NO password and NO second factor behind it: whoever holds it
+  // acts as the account until it is revoked. That puts these two on exactly the identity side of
+  // the dividing line — "an account's security changing" — and issuance by somebody other than the
+  // owner is the first thing a compromise looks like. `subjectKind` is `api_key` because the key
+  // holds `key_id` (`TopicSpec.keyedBy`), and a subject kind that names something other than the
+  // envelope key is a console filter that returns the wrong rows.
+  'devplatform.key.issued': { audited: true, subjectKind: 'api_key', outcome: 'allowed' },
+  // `allowed`, not `failed`: a revocation is a control working, not a customer being denied
+  // something. It is the row that proves WHEN a credential stopped being valid, which is the
+  // question asked after every leaked-key incident.
+  'devplatform.key.revoked': { audited: true, subjectKind: 'api_key', outcome: 'allowed' },
+
+  /* ---------------------------------------------------------------- automated trading */
+  'trade.bot.paused': {
+    audited: false,
+    why:
+      'No money moves. Pause is deliberately NOT a flatten (trade/src/bots.ts:605) — the position ' +
+      'stays open and the ledger reservation taken at start is untouched — so an operator ' +
+      'reconstructing where a user\'s money went learns nothing from this row. It is also always ' +
+      'the user acting on their own automation: the single caller is POST /v1/bots/:id/actions ' +
+      '(trade/src/server.ts:672) and the actor is always that bot\'s owner, so there is no ' +
+      'operator authority to prove afterwards. The trade facts that DO move money are ' +
+      'trade.fill.settled and trade.fee.settled, which are still in trade\'s own quarantine; when ' +
+      'either is registered this table will demand a decision about it, and that decision should ' +
+      'be yes.',
+  },
 } as const satisfies Readonly<Record<TopicName, TopicAudit>>)
 
 /**

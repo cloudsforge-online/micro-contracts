@@ -89,6 +89,60 @@ test('the topics a producer already emits are named here', () => {
 })
 
 /**
+ * The three adopted from producer quarantines, pinned field for field.
+ *
+ * `isRegisteredTopic` returning true is NOT enough for these, and the reason is `custody`: both of
+ * its ceremony topics were registered — a name check passed for the whole life of the service —
+ * while `keyedBy` said `user_id` and the emit sites passed the ADDRESS. `activity` reads the
+ * envelope key as the user id, so every export event was filed against a user that does not exist,
+ * and nothing failed. A test that only asks "is it in the list" cannot see that class of defect.
+ *
+ * So this asserts the WHOLE spec, and the expected values here were read off the producer's emit
+ * site rather than copied out of the registry a second time. Change any field of any of the three
+ * and this goes red naming the emit site that disagrees.
+ */
+test('the three adopted proposals match the emit site they were read from', () => {
+  assert.deepEqual(
+    TOPICS['trade.bot.paused'],
+    {
+      producer: 'trade',
+      payloadType: 'BotPaused',
+      version: '1.0',
+      // trade/src/bots.ts:614 — `key: bot.id`, payload `{ botId: bot.id }`, the only emit site.
+      keyedBy: 'bot_id',
+      description: 'A bot stopped trading.',
+    },
+    'trade/src/bots.ts:614 disagrees with the registered spec',
+  )
+  assert.deepEqual(
+    TOPICS['devplatform.key.issued'],
+    {
+      producer: 'devplatform',
+      payloadType: 'ApiKeyIssued',
+      version: '1.0',
+      // devplatform/src/apikeys.ts:272-274 — `key: key.id`, one payload builder.
+      keyedBy: 'key_id',
+      description: 'An API key was issued for a project, with its scopes and prefix.',
+    },
+    'devplatform/src/apikeys.ts:272 disagrees with the registered spec',
+  )
+  assert.deepEqual(
+    TOPICS['devplatform.key.revoked'],
+    {
+      producer: 'devplatform',
+      payloadType: 'ApiKeyRevoked',
+      version: '1.0',
+      // devplatform/src/apikeys.ts:357-359 — `key: key.id` from both callers (server.ts:965 and
+      // server.ts:1527); only `actor` differs between them, and an actor is not a discriminator.
+      keyedBy: 'key_id',
+      description:
+        'An API key was revoked. Every cache holding a verification result for it must drop it.',
+    },
+    'devplatform/src/apikeys.ts:357 disagrees with the registered spec',
+  )
+})
+
+/**
  * The inventory, pinned.
  *
  * The same property the scope registry buys in `packages/auth`: a topic can be added or removed
@@ -113,6 +167,8 @@ test('the registry is an enumerated inventory — every addition is deliberate',
     'community.vote.cast',
     'custody.export.requested',
     'custody.key.exported',
+    'devplatform.key.issued',
+    'devplatform.key.revoked',
     'emberkin.achievement.unlocked',
     'emberkin.battle.resolved',
     'emberkin.cosmetic.equipped',
@@ -135,6 +191,7 @@ test('the registry is an enumerated inventory — every addition is deliberate',
     'settlement.sweep.completed',
     'settlement.withdrawal.completed',
     'settlement.withdrawal.stuck',
+    'trade.bot.paused',
     'wallet.deposit.confirmed',
     'wallet.wallet.created',
     'wallet.withdrawal.requested',
@@ -143,6 +200,29 @@ test('the registry is an enumerated inventory — every addition is deliberate',
     'worlds.reward.granted',
     'worlds.title.registered',
   ])
+})
+
+/**
+ * The keying decisions that were argued, pinned so they cannot be quietly reverted.
+ *
+ * Each of these three is a topic where the obvious key is the WRONG key, and the argument is in
+ * the comment above the entry. Prose alone was not enough: the `settlement.sweep.completed` note
+ * spent its life as an instruction naming a line in `micro-settlement`, stayed on the page after
+ * settlement made the change, and read as outstanding work to everyone who found it afterwards.
+ *
+ * This asserts only the half a checkout of THIS repository can answer — that the registry still
+ * says what was decided. Whether the producer still PASSES it is a question no test here can ask,
+ * and `micro-org`'s `tools/estate-topics.mjs` asks it from a checkout that holds both halves.
+ */
+test('the keying decisions that were argued are still the ones registered', () => {
+  // Not the outbound-row surrogate: that is unique per event, so it would give this topic no
+  // ordering at all, while successive sweeps of ONE deposit address are the sequence that exists.
+  assert.equal(TOPICS['settlement.sweep.completed'].keyedBy, 'sweep_source_id')
+  // Not `user_id`, even though its siblings are: a session is the aggregate being revoked.
+  assert.equal(TOPICS['identity.session.revoked'].keyedBy, 'session_id')
+  // Not `community_id`, even though `community.proposal.executed` is: the family is split on
+  // purpose, and a consumer assuming one keying for all three would mis-order two of them.
+  assert.equal(TOPICS['community.vote.cast'].keyedBy, 'proposal_id')
 })
 
 test('every topic declares what its ordering key holds', () => {
