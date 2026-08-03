@@ -19,6 +19,8 @@ import {
   signDelivery,
   topicsProducedBy,
   validateEnvelope,
+  classifyEnvelope,
+  envelopeDefects,
   verifyDelivery,
 } from './index.ts'
 
@@ -514,4 +516,122 @@ test('a signature of the wrong length does not throw out of timingSafeEqual', ()
   assert.equal(result.ok, false)
   if (result.ok) return
   assert.equal(result.reason, 'mismatch')
+})
+
+/* ------------------------------------------------------------------ the envelope verdict */
+
+/**
+ * `market`, `trade`, `community` and `devplatform` each carried a byte-identical `envelopeDefects`
+ * that told the two facts apart by comparing against the exact error SENTENCE. A prose message is
+ * not an interface: reword it by one character and all four silently stop excusing anything.
+ *
+ * These tests are structural on purpose — not one of them asserts the wording of a message.
+ */
+const goodEnvelope = () =>
+  JSON.parse(
+    JSON.stringify(
+      makeEvent({
+        topic: 'ledger.entry.posted',
+        key: 'acct-1',
+        actor: 'service:ledger',
+        correlationId: 'req-1',
+        payload: {},
+      }),
+    ),
+  ) as Record<string, unknown>
+
+test('a well-formed envelope is valid, and carries the envelope back', () => {
+  const verdict = classifyEnvelope(goodEnvelope())
+  assert.equal(verdict.reason, 'valid')
+  assert.equal(verdict.ok, true)
+  assert.deepEqual(verdict.defects, [])
+  assert.equal(verdict.unregisteredTopic, null)
+  assert.ok(verdict.ok && verdict.value.topic === 'ledger.entry.posted')
+})
+
+test('an unregistered topic and NOTHING ELSE is its own verdict, with no defects', () => {
+  // A consumer behind its producer. This package is additive-only, so a topic it lacks is one
+  // added after this build — quarantine it, do not drop it, and do not page anybody.
+  const verdict = classifyEnvelope({ ...goodEnvelope(), topic: 'ledger.widget.frobnicated' })
+  assert.equal(verdict.reason, 'unregistered_topic')
+  assert.deepEqual(verdict.defects, [])
+  assert.equal(verdict.unregisteredTopic, 'ledger.widget.frobnicated')
+})
+
+/**
+ * THE DEFECT THAT TOOK FOUR SERVICES OFF THE BUS.
+ *
+ * `EventVersion` is `` `${number}.${number}` `` and several producers stamped the wire `version` as
+ * the integer 1. Every consumer refuses at the envelope, so the event is never delivered at all —
+ * and no per-service suite sees it, because each tests against its own fake.
+ */
+test('an integer version is malformed, not a lagging registry', () => {
+  const verdict = classifyEnvelope({ ...goodEnvelope(), version: 1 })
+  assert.equal(verdict.reason, 'malformed')
+  assert.equal(verdict.unregisteredTopic, null)
+  assert.ok(verdict.defects.some((d) => d.startsWith('version:')), verdict.defects.join('; '))
+})
+
+test('both at once reports both — a producer fixing this needs one round, not two', () => {
+  const verdict = classifyEnvelope({
+    ...goodEnvelope(),
+    topic: 'ledger.widget.frobnicated',
+    version: 1,
+    correlationId: '',
+  })
+  assert.equal(verdict.reason, 'malformed')
+  // The registration is still named, so the author is not sent to fix one thing twice.
+  assert.equal(verdict.unregisteredTopic, 'ledger.widget.frobnicated')
+  // Every problem, and the missing registration is NOT among them — it has its own field.
+  assert.equal(verdict.defects.length, 2)
+  assert.ok(verdict.defects.some((d) => d.startsWith('version:')))
+  assert.ok(verdict.defects.some((d) => d.startsWith('correlationId:')))
+  assert.ok(!verdict.defects.some((d) => d.includes('not in this registry')))
+})
+
+test('every verdict reason is reachable — none of the three is dead', () => {
+  const reasons = new Set([
+    classifyEnvelope(goodEnvelope()).reason,
+    classifyEnvelope({ ...goodEnvelope(), topic: 'ledger.widget.frobnicated' }).reason,
+    classifyEnvelope({ ...goodEnvelope(), version: 1 }).reason,
+  ])
+  assert.deepEqual([...reasons].sort(), ['malformed', 'unregistered_topic', 'valid'])
+})
+
+/**
+ * `validateEnvelope` is unchanged by the split, including the ORDER and the WORDING of its errors.
+ *
+ * Four services and two consumers read that list today. The refactor that separated the registry
+ * defect from the rest had to be invisible to them, and "invisible" is a claim worth checking
+ * rather than asserting.
+ */
+test('validateEnvelope still reports the registry defect, first and worded as before', () => {
+  const result = validateEnvelope({ ...goodEnvelope(), topic: 'ledger.widget.frobnicated', version: 1 })
+  assert.equal(result.ok, false)
+  assert.equal(
+    (result as { errors: readonly string[] }).errors[0],
+    'topic: "ledger.widget.frobnicated" is not in this registry; contracts-events may be behind',
+  )
+})
+
+/**
+ * The four copies, once.
+ *
+ * The producer names the topics it is waiting on registration for; nothing else is forgiven, and
+ * the default forgives nothing. That last part is the half the duplicated version got right and
+ * that a shared helper could easily get wrong.
+ */
+test('envelopeDefects excuses only the registrations the producer names', () => {
+  const pending = { ...goodEnvelope(), topic: 'ledger.widget.frobnicated' }
+  assert.deepEqual(envelopeDefects(pending, ['ledger.widget.frobnicated']), [])
+  // Unexplained: a topic nobody proposed is a defect, not a lag.
+  assert.equal(envelopeDefects(pending, ['ledger.other.thing']).length, 1)
+  assert.equal(envelopeDefects(pending).length, 1, 'the default must forgive nothing')
+  // And a real defect is never excused, even on a topic that IS awaiting registration.
+  assert.ok(
+    envelopeDefects({ ...pending, version: 1 }, ['ledger.widget.frobnicated']).some((d) =>
+      d.startsWith('version:'),
+    ),
+  )
+  assert.deepEqual(envelopeDefects(goodEnvelope()), [])
 })

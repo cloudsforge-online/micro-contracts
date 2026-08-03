@@ -812,21 +812,48 @@ export function serialiseEvent(event: EventEnvelope): string {
  * whether to redeploy or to page the producer's owner.
  */
 export function validateEnvelope(value: unknown): Validated<EventEnvelope> {
+  const collected = collectEnvelopeDefects(value)
+  // The registry defect first, exactly where the topic block used to push it, so the order and the
+  // wording of this function's errors are unchanged by the split.
+  const errors = [
+    ...(collected.unregisteredTopic === null ? [] : [unregisteredTopicMessage(collected.unregisteredTopic)]),
+    ...collected.defects,
+  ]
+  if (errors.length > 0) return invalid(errors)
+  return { ok: true, value: value as EventEnvelope }
+}
+
+function unregisteredTopicMessage(topic: string): string {
+  return `topic: "${topic}" is not in this registry; contracts-events may be behind`
+}
+
+interface CollectedDefects {
+  /**
+   * The topic, when it is a well-formed name this build's registry does not carry. Kept APART from
+   * `defects` because it is a different fact with a different remedy — see `classifyEnvelope`.
+   */
+  readonly unregisteredTopic: string | null
+  /** Every other reason a contract-following consumer would refuse this envelope. */
+  readonly defects: readonly string[]
+}
+
+function collectEnvelopeDefects(value: unknown): CollectedDefects {
   const errors: string[] = []
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return invalid(['envelope: expected a JSON object'])
+    return { unregisteredTopic: null, defects: ['envelope: expected a JSON object'] }
   }
   const record = value as Record<string, unknown>
 
   const topic = record['topic']
   let spec: TopicSpec | undefined
+  let unregisteredTopic: string | null = null
   if (typeof topic !== 'string') {
     errors.push('topic: missing')
   } else if (!isValidTopicName(topic)) {
     errors.push(`topic: "${topic}" is not <service>.<aggregate>.<past-tense-verb> in lowercase`)
   } else if (!isRegisteredTopic(topic)) {
     // A lagging consumer meeting a topic added after its copy of this package was published.
-    errors.push(`topic: "${topic}" is not in this registry; contracts-events may be behind`)
+    unregisteredTopic = topic
   } else {
     spec = TOPICS[topic]
   }
@@ -876,8 +903,7 @@ export function validateEnvelope(value: unknown): Validated<EventEnvelope> {
 
   if (!('payload' in record)) errors.push('payload: missing')
 
-  if (errors.length > 0) return invalid(errors)
-  return { ok: true, value: record as unknown as EventEnvelope }
+  return { unregisteredTopic, defects: errors }
 }
 
 /** Parse a delivered body. A malformed body is a validation failure, never a thrown SyntaxError. */
@@ -889,6 +915,129 @@ export function parseEvent(json: string): Validated<EventEnvelope> {
     return invalid([`envelope: not JSON (${err instanceof Error ? err.message : String(err)})`])
   }
   return validateEnvelope(parsed)
+}
+
+/**
+ * The two facts `validateEnvelope`'s error list cannot separate, separated.
+ *
+ * ══════════════════════════════════════════════════════════════════════════════════════════════
+ * **"MALFORMED" AND "NOT IN THIS REGISTRY" ARE DIFFERENT FACTS WITH DIFFERENT REMEDIES.**
+ *
+ * A malformed envelope is a **producer bug**: someone stamped the wire `version` as the integer `1`
+ * rather than `'1.0'`, and every consumer refuses the event at the envelope, so it is never
+ * delivered at all — invisible to every per-service suite, because each tests against its own fake.
+ * That happened in four services at once. The remedy is a code change in the producer, today.
+ *
+ * An unregistered topic is a **missing registration**, and usually not a fault at all: a consumer
+ * whose copy of this package predates a topic its producer already emits. This package is
+ * additive-only, so the honest reading is that the CONSUMER is behind. The remedy is a release,
+ * and in the meantime the event is quarantined rather than dropped. Collapsing the two is what let
+ * eleven `notify` rules sit for months naming topics no producer emits.
+ *
+ * **Why this belongs here and not in a new package.** Four services — `market`, `trade`,
+ * `community`, `devplatform` — each carry a byte-identical `envelopeDefects` that makes this
+ * distinction by **string-matching the error message**:
+ *
+ *     const excused = `topic: "${topic}" is not in this registry; contracts-events may be behind`
+ *     return verdict.errors.filter((error) => error !== excused)
+ *
+ * A prose error message is not an interface. Reword that sentence by one character and all four
+ * copies silently stop excusing anything, every quarantined topic starts reading as a producer
+ * bug, and four suites go red for a reason that has nothing to do with what they test. A fifth
+ * copy was about to be written in `settlement`. The check is a property of the contract, so it
+ * belongs beside the contract — this is an argument for FEWER packages, not more, and the answer
+ * is one exported function rather than a `contracts-envelope`.
+ * ══════════════════════════════════════════════════════════════════════════════════════════════
+ */
+export type EnvelopeVerdict =
+  | {
+      readonly ok: true
+      readonly reason: 'valid'
+      readonly value: EventEnvelope
+      readonly defects: readonly string[]
+      readonly unregisteredTopic: null
+    }
+  | {
+      /**
+       * The topic is a well-formed name this build's registry does not carry, and **nothing else
+       * is wrong**. A consumer behind its producer. Quarantine, do not drop, and do not page.
+       */
+      readonly ok: false
+      readonly reason: 'unregistered_topic'
+      readonly value: null
+      readonly defects: readonly []
+      readonly unregisteredTopic: string
+    }
+  | {
+      /**
+       * At least one defect that is not a missing registration. A producer bug, and `defects` names
+       * every one of them — not just the first, so a producer fixing this needs one round.
+       *
+       * `unregisteredTopic` is still reported when it applies, because an envelope can be both and
+       * hiding half of it would send the author to fix one thing twice.
+       */
+      readonly ok: false
+      readonly reason: 'malformed'
+      readonly value: null
+      readonly defects: readonly string[]
+      readonly unregisteredTopic: string | null
+    }
+
+/**
+ * Classify an already-parsed value. The same checks as `validateEnvelope`, structured.
+ *
+ * A producer's own suite runs this against an envelope its relay actually built — which is the only
+ * way to find out it is unreadable without waiting for two services to be composed, and composing
+ * two services is how the integer-version defect was found the first time, months late.
+ */
+export function classifyEnvelope(value: unknown): EnvelopeVerdict {
+  const collected = collectEnvelopeDefects(value)
+  if (collected.unregisteredTopic === null && collected.defects.length === 0) {
+    return {
+      ok: true,
+      reason: 'valid',
+      value: value as EventEnvelope,
+      defects: [],
+      unregisteredTopic: null,
+    }
+  }
+  if (collected.unregisteredTopic !== null && collected.defects.length === 0) {
+    return {
+      ok: false,
+      reason: 'unregistered_topic',
+      value: null,
+      defects: [],
+      unregisteredTopic: collected.unregisteredTopic,
+    }
+  }
+  return {
+    ok: false,
+    reason: 'malformed',
+    value: null,
+    defects: collected.defects,
+    unregisteredTopic: collected.unregisteredTopic,
+  }
+}
+
+/**
+ * A producer's self-check: every reason a contract-following consumer would refuse this envelope,
+ * with a missing registration excused only for the topics the caller says it is waiting on.
+ *
+ * This is the four duplicated copies, once. `awaitingRegistration` is the producer's own quarantine
+ * list — a topic it emits and has proposed for registration — and nothing else is forgiven. An
+ * empty list, the default, forgives nothing.
+ */
+export function envelopeDefects(
+  value: unknown,
+  awaitingRegistration: readonly string[] = [],
+): readonly string[] {
+  const verdict = classifyEnvelope(value)
+  if (verdict.reason === 'unregistered_topic') {
+    return awaitingRegistration.includes(verdict.unregisteredTopic)
+      ? []
+      : [unregisteredTopicMessage(verdict.unregisteredTopic)]
+  }
+  return verdict.defects
 }
 
 // ---------------------------------------------------------------------------
