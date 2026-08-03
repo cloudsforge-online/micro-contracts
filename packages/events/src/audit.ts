@@ -231,6 +231,46 @@ export const TOPIC_AUDIT = Object.freeze({
       'either is registered this table will demand a decision about it, and that decision should ' +
       'be yes.',
   },
+
+  /* ---------------------------------------------------------------- a world, and one thing in it */
+  //
+  // Six of Tessera's seven are simulation on the same reading as the two games above: an operator
+  // has no authority over a claim, a firing or a booking, and the title service owns the record.
+  // The seventh is not, and the distinction is worth stating rather than letting the SIMULATION
+  // label absorb it — 23-tessera.md is the first design in this estate where a title moves money
+  // OUT to a person, so "it is a game, therefore it is simulation" is exactly the inference this
+  // table should stop being able to make quietly.
+  'tessera.parcel.claimed': { audited: false, why: SIMULATION('ground being claimed') },
+  'tessera.parcel.fallowed': { audited: false, why: SIMULATION('a parcel going quiet') },
+  'tessera.parcel.transferred': {
+    audited: false,
+    why:
+      'A parcel changing hands is a trade between two players, and the platform is not a party to ' +
+      'it: land is claimed free and never sold by the platform (23-tessera.md §4), so there is no ' +
+      'operator authority to prove afterwards. The MONEY half of a parcel trade is a ' +
+      'micro-market order, and market.listing.sold is the row that proves where the payment went ' +
+      '— auditing this one as well would record the same transaction twice, once without its ' +
+      'amount.',
+  },
+  'tessera.object.fired': { audited: false, why: SIMULATION('an object coming out of the Kiln') },
+  'tessera.ward.opened': { audited: false, why: SIMULATION('a ward minting at 70% occupancy') },
+  'tessera.venue.booked': { audited: false, why: SIMULATION("a slot on a venue's calendar") },
+  // The exception, and the reason it is one:
+  //
+  // Anchoring writes an authorship claim to a public chain, from a PLATFORM key, on a user's
+  // behalf. It is irreversible, it is externally visible for ever, and the account it names as
+  // author is a claim the platform made rather than one the user signed — 23-tessera.md §9.3 is
+  // explicit that a player cannot sign through custody today (`user` is excluded from the signing
+  // purposes at custody/src/gates.ts:31), so v1 anchors with a platform key and v2 is gated on
+  // that changing. That is precisely "the platform acted with authority over a user's property",
+  // which is what this log exists to hold.
+  //
+  // `subjectKind` is `user` because the operator question afterwards is "whose authorship did we
+  // write", and the answer must join to a person rather than to an object id. The envelope key is
+  // the OBJECT id, so the payload carries `authorSubject` and the audit consumer reads that —
+  // stated here because the custody defect this table's header records was exactly the opposite
+  // mistake, a subjectKind naming something the envelope key did not hold.
+  'tessera.object.anchored': { audited: true, subjectKind: 'user', outcome: 'allowed' },
 } as const satisfies Readonly<Record<TopicName, TopicAudit>>)
 
 /**

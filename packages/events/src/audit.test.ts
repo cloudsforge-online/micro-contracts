@@ -14,7 +14,7 @@ import { AUDITED_TOPICS, TOPIC_AUDIT, auditRowFor } from './audit.ts'
 test('every registered topic has an audit decision, and every decision names a real topic', () => {
   const decided = Object.keys(TOPIC_AUDIT).sort()
   assert.deepEqual(decided, [...TOPIC_NAMES].sort())
-  assert.equal(decided.length, 47, 'the topic registry changed; every addition needs a decision')
+  assert.equal(decided.length, 54, 'the topic registry changed; every addition needs a decision')
 })
 
 /**
@@ -61,6 +61,13 @@ test('the inventory of audited topics is pinned — a widening is deliberate', (
     'settlement.sweep.completed',
     'settlement.withdrawal.completed',
     'settlement.withdrawal.stuck',
+    // The only one of Tessera's seven that is audited, and the widening IS deliberate: anchoring
+    // writes an irreversible authorship claim to a public chain from a PLATFORM key on a user's
+    // behalf, because a player cannot sign through custody today (23-tessera.md §9.3;
+    // custody/src/gates.ts:31 excludes `user` from the signing purposes). That is the platform
+    // acting with authority over a user's property, which is exactly what this log holds. The
+    // other six are simulation and say so at the length of a decision.
+    'tessera.object.anchored',
     'wallet.deposit.confirmed',
     'wallet.wallet.created',
     'wallet.withdrawal.requested',

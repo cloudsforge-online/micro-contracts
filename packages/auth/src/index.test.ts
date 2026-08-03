@@ -70,6 +70,7 @@ test('the scope registry is a closed, enumerated set — every widening is delib
     'billing:grant',
     'billing:read',
     'community:execute',
+    'community:read',
     'community:write',
     'custody:address:create',
     'custody:sign:deployer',
@@ -102,6 +103,9 @@ test('the scope registry is a closed, enumerated set — every widening is delib
     'settlement:register',
     'studio:read',
     'studio:write',
+    'tessera:provision',
+    'tessera:read',
+    'tessera:write',
     'trade:admin',
     'trade:read',
     'trade:write',
@@ -173,7 +177,7 @@ test('the four scopes no gate in the estate demands are marked dead, not granted
   assert.equal(isDeprecatedScope('analytics:read'), false)
   assert.equal(isDeprecatedScope('analytics:admin'), false)
   assert.equal(isDeprecatedScope('admin:read'), false)
-  assert.equal(LIVE_SCOPE_NAMES.length, SCOPE_NAMES.length - 4)
+  assert.equal(LIVE_SCOPE_NAMES.length, SCOPE_NAMES.length - 5)
 })
 
 test('a dead scope says why, at the length of a decision rather than a label', () => {

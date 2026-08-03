@@ -238,6 +238,62 @@ export const SCOPES = Object.freeze({
     description:
       "Execute an approved proposal on /internal — the queue worker's lane, matched exactly. Gated at community/src/server.ts:1030.",
   }),
+  /**
+   * ══════════════════════════════════════════════════════════════════════════════════════════
+   * REGISTERED BECAUSE `micro-community` ISSUES IT AND ADVERTISES IT — AND MARKED DEAD BECAUSE
+   * NOTHING DEMANDS IT. BOTH HALVES WERE MEASURED, AND THE SECOND CORRECTS A BRIEF.
+   *
+   * This entry was opened to fix a reported defect: "`community:read` is demanded by a gate but
+   * absent from the auth registry". **The second half is true. The first half is not**, and
+   * registering it as LIVE on the strength of the report would have turned one estate-wide check
+   * red to satisfy another.
+   *
+   * What was actually run — `service-ci.yml`'s own extracted scope derivation, against
+   * `micro-community`, rather than a grep:
+   *
+   *     $ node scope-audit.mjs src ../contracts/packages/auth/src/index.ts
+   *     registered community:execute
+   *                  src/server.ts:1030 (= EXECUTE_SCOPE at src/scopes.ts:54)
+   *     registered community:write
+   *                  src/server.ts:1056 (= WRITE_SCOPE at src/scopes.ts:53)
+   *     scope-audit: ok — 2 demanded scope(s), all registered or exempted
+   *
+   * Two, not three. `community/src/server.ts:142` imports `WRITE_SCOPE`, `EXECUTE_SCOPE`,
+   * `SCOPES`, `SCOPE_NAMES` and `grantsScope` — and NOT `READ_SCOPE`; `authenticateService` has
+   * exactly two call sites (`:1030`, `:1056`); and community's reads are gated by MEMBERSHIP
+   * rather than by scope (`authoriseCommunity`, `:449` onwards — a `public` community is readable
+   * by anyone, and every other kind requires a role even to read).
+   *
+   * **So what IS the defect?** `community/src/scopes.ts:38` declares `community:read` in the
+   * frozen `SCOPES` map it calls "every scope this service issues meaning for", exports it as
+   * `READ_SCOPE` at `:52`, and — the part that bites — SERVES it from `GET /v1/scopes`
+   * (`community/src/server.ts:524`, which maps over `SCOPE_NAMES`). That route is a service
+   * telling an operator which scopes to grant. Grant the one it names and identity does not
+   * degrade, it dies: `parseServiceGrants` throws `EnvError` at import on a scope `isScope` does
+   * not know (`identity/src/env.ts:167-171`), and the estate stops minting tokens at all.
+   *
+   * Registering it makes `isScope('community:read')` true, so that grant is accepted — and marking
+   * it `deprecated` is what keeps the OTHER direction honest. `org/tools/estate-scopes.mjs` clones
+   * every repository, unions the demands, and issues two verdicts: a LIVE scope nothing demands is
+   * red, and a `deprecated` scope something DOES demand is also red. Live would have been a fresh
+   * red the moment this landed. Verified after the edit by running that tool over the estate:
+   * "ok — every live scope is demanded by a gate, and every deprecated scope by none".
+   *
+   * The real repair belongs in `micro-community` and is one of two lines: gate its read lane on
+   * this scope, or delete it from `scopes.ts` the way `micro-notify` deleted `notify:ingest` and
+   * `micro-analytics` deleted its `SCOPE_INGEST`. Either one revives or removes this entry. It is
+   * recorded here rather than there because this registry is what identity reads, and a service
+   * that publishes a scope identity cannot mint is a boot failure waiting for an operator to
+   * follow instructions.
+   * ══════════════════════════════════════════════════════════════════════════════════════════
+   */
+  'community:read': Object.freeze({
+    service: 'community',
+    description:
+      'Read communities, members, proposals, votes and tallies. The wording is community/src/scopes.ts:38, which is the vocabulary GET /v1/scopes (community/src/server.ts:524) publishes to operators.',
+    deprecated:
+      "READ THIS BEFORE THE description ABOVE. No gate in the estate demands it, and that was MEASURED rather than assumed: service-ci.yml's own scope derivation, run against micro-community, reports exactly two demands — community:execute at src/server.ts:1030 and community:write at src/server.ts:1056. community/src/server.ts:142 imports WRITE_SCOPE and EXECUTE_SCOPE and not READ_SCOPE, authenticateService has those two call sites and no others, and community's reads are authorised by MEMBERSHIP instead (authoriseCommunity: a public, project or creator community is readable by anyone, every other kind needs a role even to read). So this scope opens nothing. It is registered anyway, which is the unusual half and the reason this entry exists: micro-community DECLARES it in the frozen SCOPES map at scopes.ts:38, exports it as READ_SCOPE at :52, and SERVES it from GET /v1/scopes — a route whose whole purpose is telling an operator which scopes to grant. An operator who follows that instruction does not degrade identity, they kill it: parseServiceGrants throws EnvError at import on an unknown scope (identity/src/env.ts:167-171) and the estate stops minting tokens. Registering makes isScope true so the grant is merely useless instead of fatal; marking it deprecated keeps org/tools/estate-scopes.mjs green, since that tool reports a LIVE scope nothing demands as red and a deprecated scope something DOES demand as red — both directions were run before and after this edit. Revive this ONLY in the same commit as a gate in micro-community that demands it; the alternative repair, and the tidier one, is for micro-community to delete the constant, as micro-notify did with notify:ingest and micro-analytics with its SCOPE_INGEST.",
+  }),
   'community:write': Object.freeze({
     service: 'community',
     description:
@@ -400,6 +456,36 @@ export const SCOPES = Object.freeze({
     service: 'studio',
     description:
       'Create brand kits and probe the image backend — a probe makes a real, costed image call. Gated at studio/src/server.ts:366 and two siblings.',
+  }),
+  /* ---------------------------------------------------------------------------------------------
+   * TESSERA — 23-tessera.md §11.3. Three scopes, each registered in the same commit as the gate
+   * that demands it, which §11.3 correctly calls "not a convention here, it is a build failure":
+   * the check at org/.github/workflows/service-ci.yml:197-212 derives demanded scopes and treats
+   * an unresolvable derivation as fatal, and is itself mutation-tested at
+   * org/test/workflow-shell.test.ts:300.
+   *
+   * The line numbers below were read off micro-tessera's server.ts by running that workflow's own
+   * extracted derivation against the repository, not by counting lines in an editor:
+   *
+   *     $ node scope-audit.mjs src ../contracts/packages/auth/src/index.ts
+   *     registered tessera:provision  src/server.ts:330 (= PROVISION_SCOPE at src/scopes.ts:39)
+   *     registered tessera:read       src/server.ts:361 (= READ_SCOPE at src/scopes.ts:26) + 11
+   *     registered tessera:write      src/server.ts:774 (= WRITE_SCOPE at src/scopes.ts:29)
+   * ------------------------------------------------------------------------------------------ */
+  'tessera:provision': Object.freeze({
+    service: 'tessera',
+    description:
+      'Provision a Private Ward for a worlds entitlement — the code path the existing, currently-unserved world.private.small SKU (billing/src/migrations.ts:405) finally gets. Gated at tessera/src/server.ts:330, which refuses a USER token before it checks the scope: provisioning is the platform\'s act, driven by a paid entitlement. Held by micro-worlds alone.',
+  }),
+  'tessera:read': Object.freeze({
+    service: 'tessera',
+    description:
+      'Read the world service-to-service: wards, parcels, the lazy fallow set, objects, listings, the platform terms and the two-signal discovery feed. Gated at tessera/src/server.ts:361 and eleven siblings.',
+  }),
+  'tessera:write': Object.freeze({
+    service: 'tessera',
+    description:
+      "Act on a named user's world — claim ground, place objects, fire in the Kiln, list, book, record a visit. requireUser's service lane demands this PLUS an x-user-id header naming the person, so a title acts on a player's behalf without impersonating them. Gated at tessera/src/server.ts:774.",
   }),
   'trade:admin': Object.freeze({
     service: 'trade',

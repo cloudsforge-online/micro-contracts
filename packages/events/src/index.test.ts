@@ -191,6 +191,13 @@ test('the registry is an enumerated inventory — every addition is deliberate',
     'settlement.sweep.completed',
     'settlement.withdrawal.completed',
     'settlement.withdrawal.stuck',
+    'tessera.object.anchored',
+    'tessera.object.fired',
+    'tessera.parcel.claimed',
+    'tessera.parcel.fallowed',
+    'tessera.parcel.transferred',
+    'tessera.venue.booked',
+    'tessera.ward.opened',
     'trade.bot.paused',
     'wallet.deposit.confirmed',
     'wallet.wallet.created',
@@ -223,6 +230,21 @@ test('the keying decisions that were argued are still the ones registered', () =
   // Not `community_id`, even though `community.proposal.executed` is: the family is split on
   // purpose, and a consumer assuming one keying for all three would mis-order two of them.
   assert.equal(TOPICS['community.vote.cast'].keyedBy, 'proposal_id')
+  // Not `booking_id`. The contended resource is the parcel's CALENDAR, so two bookings for one
+  // slot must share a partition; keying by the booking gives each its own and lets a consumer
+  // render the loser of a race as the winner. 23-tessera.md §11.2 argues this one at length
+  // precisely because `booking_id` is the obvious answer and the wrong one.
+  assert.equal(TOPICS['tessera.venue.booked'].keyedBy, 'parcel_id')
+  // The other six Tessera topics are keyed by the aggregate they name, which is the ordinary
+  // case; asserted as a family so a later edit cannot quietly move one of them to `owner_subject`
+  // — the key that would make one person's two parcels order against each other and two people's
+  // race for one parcel not order at all.
+  assert.equal(TOPICS['tessera.parcel.claimed'].keyedBy, 'parcel_id')
+  assert.equal(TOPICS['tessera.parcel.fallowed'].keyedBy, 'parcel_id')
+  assert.equal(TOPICS['tessera.parcel.transferred'].keyedBy, 'parcel_id')
+  assert.equal(TOPICS['tessera.object.fired'].keyedBy, 'object_id')
+  assert.equal(TOPICS['tessera.object.anchored'].keyedBy, 'object_id')
+  assert.equal(TOPICS['tessera.ward.opened'].keyedBy, 'ward_id')
 })
 
 test('every topic declares what its ordering key holds', () => {

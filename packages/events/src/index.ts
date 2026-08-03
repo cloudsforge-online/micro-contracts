@@ -203,6 +203,7 @@ export type ProducerService =
   | 'community'
   | 'devplatform'
   | 'admin-api'
+  | 'tessera'
 
 export interface TopicSpec {
   /** The service that owns the topic. The first segment of the name must equal it. */
@@ -736,6 +737,98 @@ export const TOPICS = Object.freeze({
     keyedBy: 'key_id',
     description:
       'An API key was revoked. Every cache holding a verification result for it must drop it.',
+  }),
+
+  /* ---------------------------------------------------------------------------------------------
+   * TESSERA — 23-tessera.md §11.2. Seven topics, registered in the same commit as the code that
+   * emits them, which is the rule the two paragraphs above exist because nobody followed.
+   *
+   * `keyedBy` was decided per topic rather than defaulted, and one of the seven is the rule doing
+   * work rather than being quoted. Each was checked against the emit site in `micro-tessera` —
+   * `tessera/src/world.ts`, `kiln.ts` and `economy.ts` — not taken from the design document, for
+   * the reason the `custody` note above records: both ceremony topics were registered
+   * `keyedBy: 'user_id'` while the emit sites passed the ADDRESS, and `activity` reads the
+   * envelope key AS the user id, so every export event was filed against a user who does not
+   * exist. `tessera/src/topics.test.ts` asserts the agreement from the producer's side, against
+   * this registry, so the two halves cannot drift apart in either direction.
+   * ------------------------------------------------------------------------------------------ */
+  'tessera.parcel.claimed': Object.freeze({
+    producer: 'tessera',
+    payloadType: 'ParcelClaimed',
+    version: '1.0',
+    // Two claims on one parcel must serialise. Not `owner_subject`: one person claiming two
+    // parcels has no ordering relationship at all, while two people reaching for one rectangle of
+    // ground is exactly the sequence that exists.
+    keyedBy: 'parcel_id',
+    description:
+      'Ground was claimed, free, by an account. The platform never sells land, so this event is never preceded by a payment.',
+  }),
+  'tessera.parcel.fallowed': Object.freeze({
+    producer: 'tessera',
+    payloadType: 'ParcelFallowed',
+    version: '1.0',
+    // Fallow and contest must order against the same parcel: a contest that overtook the fallow
+    // that permitted it would read as a claim taken from a live owner.
+    keyedBy: 'parcel_id',
+    description:
+      'A non-Homestead parcel went 90 days with no visitor and no edit. Contestable 30 days later; a Homestead never appears here.',
+  }),
+  'tessera.parcel.transferred': Object.freeze({
+    producer: 'tessera',
+    payloadType: 'ParcelTransferred',
+    version: '1.0',
+    // A transfer must not overtake the claim that preceded it.
+    keyedBy: 'parcel_id',
+    description:
+      'A parcel changed hands, by trade or by a resolved contest. Never a Homestead — that is refused by the database.',
+  }),
+  'tessera.object.fired': Object.freeze({
+    producer: 'tessera',
+    payloadType: 'ObjectFired',
+    version: '1.0',
+    // The object's own id, not the author's: a Kiln firing's sequence is per object. The author
+    // is a field, and an actor is not a discriminator.
+    keyedBy: 'object_id',
+    description:
+      'An object came out of the Kiln, content-addressed by the sha256 of its own bytes, with the prompt and model that made it.',
+  }),
+  'tessera.object.anchored': Object.freeze({
+    producer: 'tessera',
+    payloadType: 'ObjectAnchored',
+    version: '1.0',
+    keyedBy: 'object_id',
+    description:
+      "Authorship of an object was written to Hearth's Registry of Authorship. Lazy and user-initiated: written when a creator first lists, not when they fire.",
+  }),
+  'tessera.ward.opened': Object.freeze({
+    producer: 'tessera',
+    payloadType: 'WardOpened',
+    version: '1.0',
+    keyedBy: 'ward_id',
+    description:
+      'A new ward minted, because the previous one crossed 70% occupancy. Supply is elastic; location is not.',
+  }),
+  'tessera.venue.booked': Object.freeze({
+    producer: 'tessera',
+    payloadType: 'VenueBooked',
+    version: '1.0',
+    /**
+     * **NOT `booking_id`, and this is the one that matters.**
+     *
+     * The contended resource is the PARCEL'S CALENDAR, not the booking. Keying by the booking
+     * would give every booking its own partition, so two bookings for one slot could be processed
+     * in either order — which is precisely the failure `keyedBy` exists to prevent, and precisely
+     * the reason `settlement.sweep.completed` is keyed by the deposit address rather than by the
+     * outbound row's surrogate.
+     *
+     * The database already refuses the double-book (`tessera_one_open_booking`, a partial unique
+     * index on `(parcel_id, slot) where status = 'open'`). This is the same fact stated for the
+     * consumers, who have no such index: a calendar rendered from these events in booking-id
+     * order is a calendar that can show the loser of a race as the winner.
+     */
+    keyedBy: 'parcel_id',
+    description:
+      "A Venue's calendar slot was booked, against an escrowed ledger hold. Keyed by the parcel, because the calendar is the contended resource.",
   }),
 } as const satisfies Readonly<Record<string, TopicSpec>>)
 
