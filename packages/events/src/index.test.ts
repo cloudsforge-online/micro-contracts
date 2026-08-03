@@ -635,3 +635,72 @@ test('envelopeDefects excuses only the registrations the producer names', () => 
   )
   assert.deepEqual(envelopeDefects(goodEnvelope()), [])
 })
+
+/**
+ * THE CASE WHOSE ABSENCE LET THE WRAPPER SHIP LOSSY.
+ *
+ * `classifyEnvelope` has had "both at once reports both" since the day it landed, and it passes.
+ * The flattening wrapper beside it branched on `verdict.reason` and returned only `verdict.defects`
+ * for `malformed`, so the missing registration vanished the moment anything else was wrong — and
+ * every assertion in this file stayed green, because not one of them ran the both-at-once envelope
+ * THROUGH the wrapper. The four services adopting the primitive found it instead.
+ *
+ * The proof case is theirs verbatim: a topic that is neither registered nor proposed, on an
+ * envelope that also stamps the wire `version` as the integer 1.
+ */
+test('envelopeDefects reports an unproposed topic AND a broken version together', () => {
+  const both = { ...goodEnvelope(), topic: 'ledger.widget.frobnicated', version: 1 }
+  const defects = envelopeDefects(both)
+  assert.ok(
+    defects.some((d) => d.startsWith('version:')),
+    `the producer bug must be named: ${defects.join('; ')}`,
+  )
+  assert.ok(
+    defects.some((d) => d.includes('ledger.widget.frobnicated')),
+    `the missing registration must be named too: ${defects.join('; ')}`,
+  )
+  // The registry question comes first, as it does in validateEnvelope.
+  assert.ok(defects[0]?.includes('ledger.widget.frobnicated'))
+
+  // And the excusal still applies when the envelope is ALSO malformed: a producer that has proposed
+  // the topic is told about its version bug and nothing else.
+  // `version: missing` and not a parse error, because the integer is not a string at all — which
+  // is exactly how this defect reads in a production rejection log.
+  assert.deepEqual(envelopeDefects(both, ['ledger.widget.frobnicated']), ['version: missing'])
+})
+
+/**
+ * The invariant that makes the wrapper worth keeping at all, stated so a future branch cannot
+ * quietly swallow a fact again.
+ *
+ * With nothing excused, `envelopeDefects` is `validateEnvelope`'s error list — same messages, same
+ * order. That is the whole of its contract: `validateEnvelope` plus one excusal list. Anything it
+ * drops is a fact `validateEnvelope` reports and it does not, which is by definition the defect
+ * this table exists to catch, whatever shape the next one takes.
+ */
+test('envelopeDefects is exactly validateEnvelope plus the excusal', () => {
+  const cases: Record<string, unknown> = {
+    'well formed': goodEnvelope(),
+    'unregistered only': { ...goodEnvelope(), topic: 'ledger.widget.frobnicated' },
+    'malformed only': { ...goodEnvelope(), version: 1 },
+    'unregistered AND malformed': { ...goodEnvelope(), topic: 'ledger.widget.frobnicated', version: 1 },
+    'unregistered AND several defects': {
+      ...goodEnvelope(),
+      topic: 'ledger.widget.frobnicated',
+      version: 1,
+      correlationId: '',
+      key: '',
+    },
+    'topic name not even well formed': { ...goodEnvelope(), topic: 'Ledger.Widget', actor: 'nobody' },
+    'not an object': 'a string',
+  }
+  for (const [name, value] of Object.entries(cases)) {
+    const validated = validateEnvelope(value)
+    const expected = validated.ok ? [] : validated.errors
+    assert.deepEqual(
+      envelopeDefects(value),
+      expected,
+      `${name}: the wrapper must report every error validateEnvelope does, in the same order`,
+    )
+  }
+})

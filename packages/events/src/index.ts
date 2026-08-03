@@ -1026,18 +1026,45 @@ export function classifyEnvelope(value: unknown): EnvelopeVerdict {
  * This is the four duplicated copies, once. `awaitingRegistration` is the producer's own quarantine
  * list — a topic it emits and has proposed for registration — and nothing else is forgiven. An
  * empty list, the default, forgives nothing.
+ *
+ * ## This function shipped LOSSY, and why it was fixed rather than deleted
+ *
+ * The first cut branched on `verdict.reason` and returned `verdict.defects` for `malformed` — which
+ * **dropped `unregisteredTopic` whenever any other defect was present**. An envelope on an
+ * unproposed topic that also stamped `version` as the integer `1` reported only `version: missing`,
+ * so the author fixed the version, redeployed, and only then learned the topic was never
+ * registered. That is the precise round-trip the `EnvelopeVerdict` doc above promises not to cost
+ * ("`unregisteredTopic` is still reported when it applies... hiding half of it would send the
+ * author to fix one thing twice"), so the wrapper defeated the benefit its own package documents.
+ * It was caught by the first repository to try adopting it; all four of `market`, `trade`,
+ * `community` and `devplatform` kept a local flattening over `classifyEnvelope` because of it.
+ *
+ * Deleting it was the other defensible answer — a lossy convenience over a correct primitive earns
+ * nothing. It is kept because the loss was never intrinsic to flattening, only to that branch. What
+ * makes it worth keeping is that the honest flattening is **total**, and that is now an invariant
+ * rather than a hope: with an empty `awaitingRegistration`, this returns exactly
+ * `validateEnvelope(value).errors`, in the same order, message for message. It is `validateEnvelope`
+ * plus one excusal list — nothing more, so there is nothing left for it to lose. Delete it and the
+ * five repositories that need the excusal each re-derive it, which is the duplication that put this
+ * function here in the first place.
+ *
+ * The reason it shipped is that no test in this package ever ran the both-at-once case THROUGH the
+ * wrapper: `classifyEnvelope` had one and was right, and the wrapper's own test asserted only that
+ * the version defect survived. `envelopeDefects is exactly validateEnvelope plus the excusal` now
+ * pins the totality across a table of envelopes, so no future branch can quietly swallow a fact.
  */
 export function envelopeDefects(
   value: unknown,
   awaitingRegistration: readonly string[] = [],
 ): readonly string[] {
   const verdict = classifyEnvelope(value)
-  if (verdict.reason === 'unregistered_topic') {
-    return awaitingRegistration.includes(verdict.unregisteredTopic)
-      ? []
-      : [unregisteredTopicMessage(verdict.unregisteredTopic)]
-  }
-  return verdict.defects
+  // Reported FIRST, exactly where `validateEnvelope` puts it, so a reader of a failure sees the
+  // registry question before the envelope's own faults — and so the two lists are comparable.
+  const unexplained =
+    verdict.unregisteredTopic !== null && !awaitingRegistration.includes(verdict.unregisteredTopic)
+      ? [unregisteredTopicMessage(verdict.unregisteredTopic)]
+      : []
+  return [...unexplained, ...verdict.defects]
 }
 
 // ---------------------------------------------------------------------------
