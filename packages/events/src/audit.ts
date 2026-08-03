@@ -259,12 +259,18 @@ export const TOPIC_AUDIT = Object.freeze({
 
   /* ---------------------------------------------------------------- a world, and one thing in it */
   //
-  // Six of Tessera's seven are simulation on the same reading as the two games above: an operator
-  // has no authority over a claim, a firing or a booking, and the title service owns the record.
-  // The seventh is not, and the distinction is worth stating rather than letting the SIMULATION
-  // label absorb it — 23-tessera.md is the first design in this estate where a title moves money
-  // OUT to a person, so "it is a game, therefore it is simulation" is exactly the inference this
-  // table should stop being able to make quietly.
+  // FIVE of Tessera's seven are simulation on the same reading as the two games above: an operator
+  // has no authority over a claim or a firing, and the title service owns the record. Two are not,
+  // for two DIFFERENT reasons, and both are worth stating rather than letting the SIMULATION label
+  // absorb them — 23-tessera.md is the first design in this estate where a title moves money OUT
+  // to a person, so "it is a game, therefore it is simulation" is exactly the inference this table
+  // should stop being able to make quietly.
+  //
+  // `tessera.object.anchored` is audited: the platform acts with authority over a user's property.
+  // `tessera.venue.booked` is NOT audited, but not because it is a game — it moves real money, and
+  // the reason it is excluded is that the money is already audited by the row that names it. That
+  // entry is written out in full below, because a booking carrying a ledger reservation is
+  // precisely the "money topic added to a game service" this helper's docstring exists to catch.
   'tessera.parcel.claimed': { audited: false, why: SIMULATION('ground being claimed') },
   'tessera.parcel.fallowed': { audited: false, why: SIMULATION('a parcel going quiet') },
   'tessera.parcel.transferred': {
@@ -279,7 +285,26 @@ export const TOPIC_AUDIT = Object.freeze({
   },
   'tessera.object.fired': { audited: false, why: SIMULATION('an object coming out of the Kiln') },
   'tessera.ward.opened': { audited: false, why: SIMULATION('a ward minting at 70% occupancy') },
-  'tessera.venue.booked': { audited: false, why: SIMULATION("a slot on a venue's calendar") },
+  'tessera.venue.booked': {
+    audited: false,
+    why:
+      'NOT simulation, and calling it that would be the mistake this table watches for: a booking ' +
+      'moves real money. An open booking is refused unless it names an escrowed ledger ' +
+      'reservation — `bookings_open_holds_money` (tessera/src/migrations.ts:916) is a CHECK that a ' +
+      "row with status 'open' has a non-null reservation_id — so a free hold on somebody else's " +
+      'calendar is unrepresentable rather than discouraged. It is excluded for the reason ' +
+      'market.offer.made is: the money is already audited by the row that actually names it. The ' +
+      'reservation is a balanced posting pair in micro-ledger, and ledger emits ' +
+      'ledger.entry.posted for it — which IS audited above, keyed by the entry, carrying both ' +
+      'postings and the amount. This envelope carries priceWei and the reservation id but NEITHER ' +
+      'ACCOUNT, and it is keyed by parcel_id because the contended resource is the calendar, not ' +
+      'the money. Mirroring it would put a second, thinner row in the log for one reservation of ' +
+      "one player's funds, and an operator asking \"where did this go\" would see it held twice. " +
+      "The platform is also not a party: it is a player booking a slot on another player's venue " +
+      'with their own funds. Two things would make this decision wrong and both must be ' +
+      'revisited HERE, not silently: if the booking path ever moves money the ledger does not ' +
+      'see, or if the platform ever takes a cut at booking time rather than at settlement.',
+  },
   // The exception, and the reason it is one:
   //
   // Anchoring writes an authorship claim to a public chain, from a PLATFORM key, on a user's
