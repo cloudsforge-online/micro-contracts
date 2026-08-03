@@ -504,6 +504,95 @@ export const LIVE_SCOPE_NAMES: readonly Scope[] = Object.freeze(
 )
 
 /**
+ * The dead half of the registry, **as a type, computed from the registry** — never a list.
+ *
+ * `deprecated` is a property of an entry, so which scopes are dead is already written down once,
+ * in the entry, next to the reasoning. This reads that same field at the type level: `SCOPES` is
+ * `as const`, so an entry that carries `deprecated:` has that key in its TYPE and an entry that
+ * does not, does not. Nothing here has to be kept in step with anything.
+ *
+ * A hand-written companion list was the obvious alternative and it is the disease this package
+ * keeps catching: the grant list, notify's catalogue and custody's route samples were each a
+ * second copy of a truth that already existed, and each of them drifted. A copy that must be
+ * edited in the same commit as the registry will one day not be, and the failure is silent in the
+ * safe-looking direction — a scope marked dead in the registry that this type still calls live.
+ *
+ * `scope-types.test.ts` compiles the two derivations against each other: the runtime one
+ * (`isDeprecatedScope`, which reads the property) and this one (the conditional type, which reads
+ * the property's type). They are derived from the same field by different machinery, so a change
+ * that breaks one and not the other — a reason built by concatenation, a spec assembled by a
+ * helper, `ScopeSpec.deprecated` widened to `string | undefined` — goes red instead of quietly
+ * reopening this hole.
+ */
+export type DeprecatedScope = {
+  [Name in Scope]: (typeof SCOPES)[Name] extends { readonly deprecated: string } ? Name : never
+}[Scope]
+
+/**
+ * A scope identity will actually mint. **This is the type an outbound declaration wants.**
+ *
+ * `Scope` is the whole registry, dead entries included, and that is correct for the direction it
+ * is used in most: a token arriving from anywhere may carry a scope that has since died, and
+ * `isScope`, `knownScopes` and `ServiceClaims.scopes` must still be able to name it. Reading is
+ * wide. **Demanding is narrow**: a service that says "my token must carry `notify:send`" is
+ * declaring a grant identity refuses to issue, and identity fail-fasts on it at import
+ * (`identity/src/env.ts:141`), so the deploy does not degrade — the identity container dies and
+ * the estate stops minting tokens at all.
+ *
+ * That is the same failure `readonly Scope[]` was introduced in `micro-market` and `micro-wallet`
+ * to prevent, and it stopped one step short: `Scope` caught `policy:evaluate` and `custody:address`
+ * because those are not registry keys, and would not have caught `wallet:provision`, which is. So
+ * an outbound constant is annotated `readonly LiveScope[]` and the compile error arrives in the
+ * file where the mistake is written, which is the only place anyone can fix it. `service-ci.yml`'s
+ * scope audit cannot: it reads a repository's INBOUND route gates, and this is an outbound demand.
+ *
+ * **`Scope` does not change meaning and must not.** Narrowing it to the live set would delete four
+ * members of a published union in twenty-two consumers — the exact change that broke the estate in
+ * run 30770414745 and was undone in `60129d8` — and it would also be WRONG, because the reading
+ * direction genuinely needs the dead names. The migration is therefore additive and per-consumer:
+ * a repository re-annotates its outbound constants to `LiveScope` when it is next touched, and
+ * nothing forces a coordinated release. If every consumer eventually holds `LiveScope` on every
+ * outbound constant, `Scope` still stays as it is; the two types mean different things, not the
+ * same thing at two moments in time.
+ */
+export type LiveScope = Exclude<Scope, DeprecatedScope>
+
+/**
+ * Narrow a string to a scope worth granting. The false branch of a `Scope` narrows to
+ * `DeprecatedScope`, so this reads in both directions.
+ *
+ * `LIVE_SCOPE_NAMES` deliberately keeps its `readonly Scope[]` annotation rather than being
+ * retyped to `readonly LiveScope[]`: `micro-org`'s `tools/compat.ts` judges an exported array
+ * whose element union loses members `narrowed-union`, and breaking. A consumer that wants the
+ * live list at its narrow type builds it here — `SCOPE_NAMES.filter(isLiveScope)` — which is the
+ * additive way to get the same thing.
+ */
+export function isLiveScope(value: string): value is LiveScope {
+  return isScope(value) && !isDeprecatedScope(value)
+}
+
+/**
+ * What a client declares when the thing it calls needs no credential at all.
+ *
+ * This exists because "declare exactly what you need" and "declare something" are in tension for
+ * one real case. `micro-wallet`'s `PRICING_SCOPES` names `pricing:read` while the only route it
+ * calls, `GET /rates` (`pricing/src/server.ts:312`), is ungated — the board is public. The grant
+ * is wider than the call sites need and was kept anyway, because `micro-deploy`'s
+ * `derive-grants.mjs` reads a module that presents a credential and declares no scope as an
+ * `undeclared` gap and fails the estate build (`deploy/scripts/derive-grants.mjs:321`). An empty
+ * array is indistinguishable from a forgotten declaration, so the honest answer was unsayable and
+ * the service over-declared instead. An over-declaration is not a formality: it is a real grant on
+ * a real token, and AD-05 is the rule that a token should carry the least it can.
+ *
+ * A named constant makes "nothing" a statement rather than an absence. `derive-grants.mjs` needs
+ * one branch to read it — where it matches `export const <NAME>_SCOPES ... = Object.freeze(`, also
+ * match `= NO_SCOPES_REQUIRED`, and treat that file as cleanly declared with zero scopes instead
+ * of an undeclared gap. Until micro-deploy carries that branch, a consumer switching to this would
+ * fail the estate build, so the order is: micro-deploy first, then the consumer.
+ */
+export const NO_SCOPES_REQUIRED: readonly LiveScope[] = Object.freeze([])
+
+/**
  * Exact match only. There is no `custody:*`, no `ledger:write` covering `ledger:post`, and no
  * implication ordering between scopes.
  *

@@ -1,4 +1,9 @@
 node_modules/
 dist/
+# scope-types.test.ts type-checks generated fixtures in a throwaway project beside the package —
+# inside it, so `../src/index.ts` resolves as a sibling does, and outside `src/` so `pnpm
+# typecheck` never sees a fixture that is MEANT to fail. It is removed in a `finally`; this covers
+# the run that is killed before the finally.
+.type-tests-*/
 *.tsbuildinfo
 .DS_Store
