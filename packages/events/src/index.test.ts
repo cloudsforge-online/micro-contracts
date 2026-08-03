@@ -89,7 +89,7 @@ test('the topics a producer already emits are named here', () => {
 })
 
 /**
- * The three adopted from producer quarantines, pinned field for field.
+ * The four adopted from producer quarantines, pinned field for field.
  *
  * `isRegisteredTopic` returning true is NOT enough for these, and the reason is `custody`: both of
  * its ceremony topics were registered — a name check passed for the whole life of the service —
@@ -98,10 +98,10 @@ test('the topics a producer already emits are named here', () => {
  * and nothing failed. A test that only asks "is it in the list" cannot see that class of defect.
  *
  * So this asserts the WHOLE spec, and the expected values here were read off the producer's emit
- * site rather than copied out of the registry a second time. Change any field of any of the three
+ * site rather than copied out of the registry a second time. Change any field of any of the four
  * and this goes red naming the emit site that disagrees.
  */
-test('the three adopted proposals match the emit site they were read from', () => {
+test('the four adopted proposals match the emit site they were read from', () => {
   assert.deepEqual(
     TOPICS['trade.bot.paused'],
     {
@@ -139,6 +139,43 @@ test('the three adopted proposals match the emit site they were read from', () =
         'An API key was revoked. Every cache holding a verification result for it must drop it.',
     },
     'devplatform/src/apikeys.ts:357 disagrees with the registered spec',
+  )
+  assert.deepEqual(
+    TOPICS['market.offer.made'],
+    {
+      producer: 'market',
+      payloadType: 'OfferMade',
+      version: '1.0',
+      // market/src/bids.ts:449-450 — `topic: OFFER_MADE_TOPIC`, `key: listing.id`, where `listing`
+      // is the `listings` row the emitting transaction holds `for update` (bids.ts:406). The
+      // LISTING, not the offer: two offers on one listing are the same contention and must order
+      // against each other, and it is the key `market.listing.sold` already uses.
+      keyedBy: 'listing_id',
+      description:
+        'A buyer made an offer on a listing. Carries the seller as well as the offerer: the notification this event exists for goes to the person who did not act.',
+    },
+    'market/src/bids.ts:449 disagrees with the registered spec',
+  )
+})
+
+/**
+ * The fourth adopted proposal was adopted VERBATIM, and that is a property worth asserting.
+ *
+ * Two repositories quarantined `market.offer.made` — the producer (`market/src/topics.ts`) and its
+ * first consumer (`notify/src/topics.ts`) — and notify's own comment says its copy is "copied
+ * VERBATIM from `market/src/topics.ts`'s own quarantine, so `micro-contracts` adopting it is a
+ * paste and the two repositories cannot propose two different contracts for one topic". Adoption
+ * is only that guarantee if the registration really is the paste. A registration that reworded the
+ * description while landing it would leave three descriptions of one topic in three repositories
+ * and no way to tell which was the contract.
+ *
+ * This cannot read the sibling repositories, so it pins the string here instead: the value that was
+ * pasted, spelled once more, in the one file a reviewer of a re-wording would be looking at.
+ */
+test('the market.offer.made description is the one both quarantines proposed, character for character', () => {
+  assert.equal(
+    TOPICS['market.offer.made'].description,
+    'A buyer made an offer on a listing. Carries the seller as well as the offerer: the notification this event exists for goes to the person who did not act.',
   )
 })
 
@@ -185,6 +222,7 @@ test('the registry is an enumerated inventory — every addition is deliberate',
     'ledger.entry.posted',
     'ledger.reconciliation.completed',
     'market.listing.sold',
+    'market.offer.made',
     'mint.deploy.confirmed',
     'settlement.outbound.confirmed',
     'settlement.outbound.failed',

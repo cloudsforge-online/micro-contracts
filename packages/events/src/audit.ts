@@ -153,6 +153,31 @@ export const TOPIC_AUDIT = Object.freeze({
   // other than the key is a filter that returns the wrong rows.
   'settlement.sweep.completed': { audited: true, subjectKind: 'sweep_source', outcome: 'allowed' },
   'market.listing.sold': { audited: true, subjectKind: 'listing', outcome: 'allowed' },
+  // NOT audited, and this one needed arguing rather than labelling, because the obvious reading —
+  // "an offer is a bid, not a transfer, so no money moves" — is FALSE. `makeOffer` calls
+  // `holdEscrow` (market/src/bids.ts:429), which calls `ledger.postEntry` with `reservePostings`
+  // (market/src/escrow.ts:145) before the offer row is even returned. Making an offer reserves the
+  // offerer's money. The reason it is still excluded is the settlement.outbound.confirmed reason,
+  // not the simulation one: that reservation IS already in the operator log, as the richer of the
+  // two rows.
+  'market.offer.made': {
+    audited: false,
+    why:
+      'The money an offer moves is already audited, by the row that actually names it. holdEscrow ' +
+      '(market/src/escrow.ts:145) posts a ledger entry for the reservation, and ledger emits ' +
+      'ledger.entry.posted for every posted entry (ledger/src/entries.ts:441) — which IS audited ' +
+      'above, keyed by the entry, carrying both postings and the amount. This envelope carries ' +
+      'neither account and is keyed by the listing, so mirroring it as well would put a second, ' +
+      'thinner row in the log for one reservation of one buyer\'s money, and an operator asking ' +
+      '"where did this go" would see it held twice. The platform is also not a party to an offer ' +
+      'and exercises no authority over one: it is a buyer bidding their own funds, refused ' +
+      'outright when the offerer is the seller (bids.ts:417). The point at which the platform ' +
+      'becomes a party is the SALE, and market.listing.sold is audited above. Volume settles what ' +
+      'is left — an offer is the high-volume half of a marketplace and most of them expire or are ' +
+      'declined, so auditing them would bury the sales that matter under bids that came to ' +
+      'nothing. If a future offer path ever moves money the ledger does not see, this decision is ' +
+      'wrong and must be revisited here.',
+  },
   'mint.deploy.confirmed': { audited: true, subjectKind: 'token', outcome: 'allowed' },
   'billing.entitlement.granted': { audited: true, subjectKind: 'entitlement', outcome: 'allowed' },
   'billing.entitlement.revoked': { audited: true, subjectKind: 'entitlement', outcome: 'allowed' },

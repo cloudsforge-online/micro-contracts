@@ -502,6 +502,40 @@ export const TOPICS = Object.freeze({
     keyedBy: 'listing_id',
     description: 'A listing settled, against a ledger entry or an on-chain transaction.',
   }),
+  /**
+   * Adopted from `market/src/topics.ts`'s `AWAITING_REGISTRATION` and `notify/src/topics.ts`'s,
+   * which hold byte-identical specs for it. This is a COPY of that spec, not a fresh one — the
+   * quarantine's whole purpose is that the producer and its first consumer cannot end up proposing
+   * two different contracts for one topic, and a registration that reworded the description would
+   * throw that away for nothing.
+   *
+   * `keyedBy: 'listing_id'` was re-read off the emit site before pasting rather than trusted:
+   * `market/src/bids.ts:449` emits `topic: OFFER_MADE_TOPIC` and `:450` passes `key: listing.id`,
+   * where `listing` is `toListing` of the `listings` row that transaction is holding `for update`.
+   * It is the LISTING, not the offer and not either party — which is right, because ordering must
+   * be per listing: two offers on one listing are the same contention, and keying by offer id
+   * would make every offer its own partition. The same key `market.listing.sold` already uses.
+   *
+   * That re-read is not ceremony. `custody`'s two ceremony topics were registered `keyedBy:
+   * 'user_id'` while their emit sites passed the ADDRESS, `activity` reads the envelope key AS the
+   * user id, and every key-export event was filed against a user who does not exist. A spec copied
+   * from a proposal nobody checked against the producer is exactly how that happened.
+   *
+   * The payload's `sellerSubject` is the point of the topic and is why a rule for it is writable
+   * at all: everything else on the envelope — the actor, `offererSubject`, the key — names the
+   * person who ACTED, so before that field existed the only notification this event could produce
+   * would have told the offerer their own offer had arrived. `micro-notify` refused to write the
+   * rule for exactly that reason and recorded the refusal (`blockedBy: 'no-subject'`); market added
+   * the field (`bids.ts:477`, read off the same `for update` row) and the refusal ended.
+   */
+  'market.offer.made': Object.freeze({
+    producer: 'market',
+    payloadType: 'OfferMade',
+    version: '1.0',
+    keyedBy: 'listing_id',
+    description:
+      'A buyer made an offer on a listing. Carries the seller as well as the offerer: the notification this event exists for goes to the person who did not act.',
+  }),
   'community.proposal.executed': Object.freeze({
     producer: 'community',
     payloadType: 'ProposalExecuted',
