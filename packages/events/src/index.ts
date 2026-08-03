@@ -355,6 +355,105 @@ export const TOPICS = Object.freeze({
     keyedBy: 'chain:network',
     description: 'An outbound transaction passed its deadline unconfirmed. Pages on one.',
   }),
+
+  /* ── settlement — three of the four names it emits unregistered, and the one that is refused ──
+   *
+   * `settlement` emitted six topic names against two registered ones. Three of the four missing
+   * names are real facts and are registered below. The fourth is refused, and the refusal is the
+   * point of the exercise: registering all four would have made a reconciliation check quiet
+   * without making anything true.
+   *
+   * **REFUSED: `settlement.outbound.stuck`.** It is not a second fact. `settlement/src/
+   * withdrawals.ts:517-547` builds ONE `payload` object and emits it twice — once as
+   * `settlement.withdrawal.stuck` keyed `chain:network`, once as `settlement.outbound.stuck` keyed
+   * `row.id` — so the two differ in nothing but their partition. Nothing in the estate subscribes
+   * to the second name (the only mentions outside settlement are `notify/src/topics.ts:126` and
+   * `org/tools/estate-topic-gaps.json:38`, both describing it as the defect), and the registered
+   * event already carries the row: `base(row)` puts `outboundId: row.id` on the payload
+   * (`withdrawals.ts:411-412`), so an operator queue can order by a field it is already sent.
+   * Registering it would put a second official name on one fact — which is `wallet.deposit.credited`
+   * against `wallet.deposit.confirmed` run deliberately instead of by accident, and it would make
+   * "which name does a stuck withdrawal have" a question with two right answers forever. A topic is
+   * cheap to add and impossible to remove; this one buys a partition that a `group by` gives free.
+   *
+   * None of the three below has the shape that made `identity.mfa.changed` unregisterable — one
+   * name over four payload shapes chosen by a discriminator. Each carries exactly one shape:
+   * `confirmedEvents` (:436), `failedEvents` (:475) and `sweepCompletedEvents`
+   * (`sweeps.ts:472`) each build a single object literal with fixed keys. `refundable` on
+   * `.failed` is a boolean FIELD every instance carries, not a selector between payloads — the same
+   * distinction `identity.session.revoked`'s `reason` passes.
+   * ------------------------------------------------------------------------------------------ */
+  /**
+   * **Wallet's name, and the most load-bearing topic this service emits.**
+   *
+   * `wallet/src/settlement.ts:167` declares this exact string and `wallet/src/server.ts:859`
+   * branches on it to release the user's reservation — spelled there before `settlement` existed, so
+   * the registry follows the live contract rather than renaming it for tidiness. Deliberately
+   * narrower than `settlement.withdrawal.completed`, which carries the same fact with the whole
+   * outbound transaction on it for notify and the operator surfaces; a subscription is per topic, so
+   * no consumer sees both.
+   *
+   * Keyed by the WITHDRAWAL, not settlement's outbound row: `withdrawals.ts:442` passes
+   * `row.sourceRef`, and the withdrawal id is the only one of the two identifiers wallet holds.
+   */
+  'settlement.outbound.confirmed': Object.freeze({
+    producer: 'settlement',
+    payloadType: 'OutboundConfirmed',
+    version: '1.0',
+    keyedBy: 'withdrawal_id',
+    description:
+      "A withdrawal reached its chain's confirmation depth. Releases wallet's reservation.",
+  }),
+  /**
+   * The other terminal outcome, and `refundable` is why it cannot be folded into the one above.
+   *
+   * `wallet/src/server.ts:869-876` returns the reservation to the user's balance only when
+   * `refundable === true`, and defaults it to false, because refunding a payment that actually
+   * landed pays the user twice. `notify/src/topics.ts:124` has recorded a notification for this
+   * exact string with "no producer" for the life of that service — the producer existed all along
+   * and no registry named it.
+   */
+  'settlement.outbound.failed': Object.freeze({
+    producer: 'settlement',
+    payloadType: 'OutboundFailed',
+    version: '1.0',
+    keyedBy: 'withdrawal_id',
+    description:
+      'A withdrawal ended without reaching the chain. `refundable` says whether the money may go back.',
+  }),
+  /**
+   * Customer funds moved INTO the treasury, which is the one movement no other topic reports.
+   *
+   * A sweep empties a per-user deposit address into the pinned treasury address
+   * (`settlement/src/sweeps.ts`). No reservation waits on it, so it is not a `withdrawal.*` topic —
+   * but it is the only event saying that customer money crossed into the blast radius of the signing
+   * credential, and `ledger.reconciliation.completed` compares totals without anything telling it
+   * which movements produced them. Registered before a subscriber exists, on the same rule as the
+   * aetherholm block above: an unregistered topic from a live producer is quarantined as
+   * unclassifiable however correct the delivery is.
+   *
+   * **KEYED BY THE DEPOSIT ADDRESS, WHICH IS NOT WHAT THE EMIT SITE PASSES TODAY.**
+   * `sweeps.ts:476` keys it `row.id` — settlement's own outbound-transaction surrogate — and that is
+   * the only member of this family to do so: `confirmedEvents`, `failedEvents` and
+   * `withdrawal.completed` all key by `row.sourceRef`, the aggregate the fact is ABOUT. An outbound
+   * row id is unique per event, so keying by it means this topic has no ordering at all, while the
+   * one sequence that genuinely exists — successive sweeps of one address, each decrementing that
+   * address's observed balance (`sweeps.ts:431`) — is scattered across partitions. That is the
+   * `identity.session.revoked` mistake in its ordering form: keyed by the mechanism rather than the
+   * subject. `row.sourceRef` is the sweep source id, set on every sweep at `sweeps.ts:394` and
+   * already on the payload as `sweepSourceId`, so the change is `key: row.sourceRef` and nothing
+   * else. Fixed here rather than after adoption because a key is frozen the moment a consumer reads
+   * it, and today there is none.
+   */
+  'settlement.sweep.completed': Object.freeze({
+    producer: 'settlement',
+    payloadType: 'SweepCompleted',
+    version: '1.0',
+    keyedBy: 'sweep_source_id',
+    description:
+      'A deposit address was emptied into the pinned treasury and confirmed at depth. The only event that says customer funds moved into custody proper.',
+  }),
+
   'billing.entitlement.granted': Object.freeze({
     producer: 'billing',
     payloadType: 'EntitlementGranted',

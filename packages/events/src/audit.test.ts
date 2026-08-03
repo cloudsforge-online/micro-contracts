@@ -14,7 +14,7 @@ import { AUDITED_TOPICS, TOPIC_AUDIT, auditRowFor } from './audit.ts'
 test('every registered topic has an audit decision, and every decision names a real topic', () => {
   const decided = Object.keys(TOPIC_AUDIT).sort()
   assert.deepEqual(decided, [...TOPIC_NAMES].sort())
-  assert.equal(decided.length, 41, 'the topic registry changed; every addition needs a decision')
+  assert.equal(decided.length, 44, 'the topic registry changed; every addition needs a decision')
 })
 
 /**
@@ -55,6 +55,8 @@ test('the inventory of audited topics is pinned — a widening is deliberate', (
     'ledger.reconciliation.completed',
     'market.listing.sold',
     'mint.deploy.confirmed',
+    'settlement.outbound.failed',
+    'settlement.sweep.completed',
     'settlement.withdrawal.completed',
     'settlement.withdrawal.stuck',
     'wallet.deposit.confirmed',
@@ -97,15 +99,24 @@ test('every audited topic names a subject kind in the console vocabulary', () =>
 })
 
 /**
- * The two failures. An operator filtering the log for what went wrong must find exactly these,
- * and finding them is the point: both are a customer who asked for something and did not get it.
+ * The three failures. An operator filtering the log for what went wrong must find exactly these,
+ * and finding them is the point: each is a customer who asked for something and did not get it.
+ *
+ * `settlement.outbound.failed` joined them with the settlement registration wave. It is the one
+ * that carries a REMEDY as well as a fact — `refundable` is what wallet reads to decide whether the
+ * reservation goes back to the user's balance (`wallet/src/server.ts:872`) — so it is the row an
+ * operator needs to prove, afterwards, why money did or did not return.
  */
-test('the only failed outcomes are the two topics that report a non-event', () => {
+test('the only failed outcomes are the three topics that report a non-event', () => {
   const failed = AUDITED_TOPICS.filter((name) => {
     const spec = TOPIC_AUDIT[name]
     return spec.audited && spec.outcome === 'failed'
   })
-  assert.deepEqual(failed, ['settlement.withdrawal.stuck', 'worlds.provision.failed'])
+  assert.deepEqual(failed, [
+    'settlement.outbound.failed',
+    'settlement.withdrawal.stuck',
+    'worlds.provision.failed',
+  ])
 })
 
 /* ------------------------------------------------------------------ the mapping */

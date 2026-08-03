@@ -133,6 +133,25 @@ export const TOPIC_AUDIT = Object.freeze({
   },
   // `failed`, deliberately: a stuck withdrawal is money that a customer asked for and did not get.
   'settlement.withdrawal.stuck': { audited: true, subjectKind: 'chain_network', outcome: 'failed' },
+  // `failed` for the same reason, and this one carries the refund decision. `refundable` is what
+  // wallet reads to return the reservation to a user's balance (wallet/src/server.ts:872), so it is
+  // the row an operator needs to prove afterwards why money did or did not go back.
+  'settlement.outbound.failed': { audited: true, subjectKind: 'withdrawal', outcome: 'failed' },
+  'settlement.outbound.confirmed': {
+    audited: false,
+    why:
+      'The same fact as settlement.withdrawal.completed, which IS audited above and is the richer ' +
+      'of the two — settlement emits both from one call site (settlement/src/withdrawals.ts:436) ' +
+      'because wallet wants a narrow payload and the operator surfaces want the transaction. ' +
+      'Mirroring both would put two rows in the log for one movement of one user\'s money, and an ' +
+      'operator answering "where did this go" would see the withdrawal complete twice.',
+  },
+  // Money crossing INTO the blast radius of the signing credential: a deposit address emptied into
+  // the pinned treasury. The key names the deposit address, not settlement's outbound row.
+  // `sweep_source` rather than `deposit_address` because that is what the key literally holds — the
+  // sweep source row settlement mints per deposit address — and a subject kind that names something
+  // other than the key is a filter that returns the wrong rows.
+  'settlement.sweep.completed': { audited: true, subjectKind: 'sweep_source', outcome: 'allowed' },
   'market.listing.sold': { audited: true, subjectKind: 'listing', outcome: 'allowed' },
   'mint.deploy.confirmed': { audited: true, subjectKind: 'token', outcome: 'allowed' },
   'billing.entitlement.granted': { audited: true, subjectKind: 'entitlement', outcome: 'allowed' },
