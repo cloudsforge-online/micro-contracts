@@ -77,6 +77,7 @@ test('the scope registry is a closed, enumerated set — every widening is delib
     'devplatform:introspect',
     'emberkin:write',
     'faucet:read',
+    'identity:admin',
     'indexer:read',
     'indexer:write',
     'lantern:read',

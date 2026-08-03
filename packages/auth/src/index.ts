@@ -269,6 +269,25 @@ export const SCOPES = Object.freeze({
     description:
       'Read faucet state service-to-service; the static collector token synthesises exactly this and no more. Gated at faucet/src/server.ts:507.',
   }),
+  /**
+   * The first `identity:*` scope, and it is registered in the same change as the gate that demands
+   * it — which is the rule this registry's two deprecated entries exist to record.
+   *
+   * A fresh environment has no administrator, and admin-api deliberately answers 501 to
+   * `identity.role.grant` rather than exposing an unauthenticated route that mints one: a service
+   * that can promote its own first operator is a service whose compromise grants the estate. What
+   * was missing was the route for every administrator AFTER the first, so admin-api's four-eyes
+   * queue had nothing to execute against and the estate's only path was a manual UPDATE.
+   *
+   * A SERVICE lane and not the operator role, deliberately: an operator who could promote with
+   * their own token would be one pair of eyes on the most consequential write in the estate, which
+   * is exactly what the approval queue exists to prevent. Held by admin-api alone.
+   */
+  'identity:admin': Object.freeze({
+    service: 'identity',
+    description:
+      "Change a user's platform roles service-to-service, carrying the approval id that authorised it. Gated at identity/src/server.ts (authenticateIdentityAdmin), which refuses a user token however privileged; the write lands a platform_role_grants row in the same transaction as the users.roles update, enforced by a deferred constraint trigger rather than by the handler.",
+  }),
   'indexer:read': Object.freeze({
     service: 'indexer',
     description: 'Read blocks, transactions, address activity and observed balances.',
