@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import {
   PASSWORD_MAX_LENGTH,
   SCOPES,
@@ -51,7 +52,9 @@ test('the scope registry is a closed, enumerated set — every widening is delib
   // It only ever GROWS: this package is additive-only (AD-02) and the compat job refuses a removal,
   // because narrowing `Scope` narrows every union built from it in twenty-two consumers. A scope
   // the estate turns out not to demand is therefore marked `deprecated` and drops out of
-  // `LIVE_SCOPE_NAMES` — see the two below — rather than disappearing from this list.
+  // `LIVE_SCOPE_NAMES` — see the four below — rather than disappearing from this list. Two dead
+  // scopes were once DELETED here and broke the build of twenty-two consumers, because removing a
+  // key narrows `Scope`; that is the whole reason the marking exists.
   assert.deepEqual([...SCOPE_NAMES].sort(), [
     'admin:audit:write',
     'admin:read',
@@ -120,14 +123,19 @@ test('the scope registry is a closed, enumerated set — every widening is delib
  * unregistered scope fails that repository's build. Nothing proves the other direction, because no
  * single checkout can see every gate in the estate: a scope here that no gate anywhere demands is
  * invisible to every build and to this file's own inventory pin, which was written from the
- * registry rather than from the gates. Both entries below were exactly that, and the pin was
- * protecting them.
+ * registry rather than from the gates. The first two entries below were exactly that, and the pin
+ * was protecting them.
+ *
+ * The third and fourth were found by the machine that closes this direction: micro-org's
+ * `estate-ci.yml` unions every gate in all 56 repositories and fails on a live scope none of them
+ * demand. It fails the OTHER way too — on a `deprecated` scope some gate does demand — so each
+ * assertion below is a claim about the estate that goes red when it stops being true, not a label.
  *
  * A dead scope is not inert. identity mints tokens from this list, so it is a credential that can
  * be granted, audited and rotated while opening nothing — and the next reader takes it as evidence
  * that a capability exists somewhere.
  */
-test('the two scopes no gate in the estate demands are marked dead, not granted', () => {
+test('the four scopes no gate in the estate demands are marked dead, not granted', () => {
   // notify/src/server.ts:417 — /ingest is MAC-only. The signature over the raw bytes IS the
   // authentication; no bearer is read, so no scope can gate it. notify had already deleted its own
   // `notify:ingest` constant on this reasoning and recorded it at notify/src/server.ts:99.
@@ -135,19 +143,37 @@ test('the two scopes no gate in the estate demands are marked dead, not granted'
   // wallet/src/server.ts:132 — read / write / money, three authorities, deliberately. Creating a
   // wallet (:464) and assigning a deposit address (:605) are both `wallet:write`.
   assert.equal(isDeprecatedScope('wallet:provision'), true)
+  // analytics/src/server.ts:514 — /ingest reads the raw bytes, verifies cf-signature over exactly
+  // those bytes, and only then parses. No Authorization header is read, so no scope can gate it,
+  // and no producer could have satisfied one: an outbox relay is a Postgres-poll background job
+  // with no session. analytics deleted its own SCOPE_INGEST and recorded why at server.ts:119.
+  assert.equal(isDeprecatedScope('analytics:ingest'), true)
+  // admin-api/src/server.ts:592 — POST /v1/events, the audit mirror, verifies cf-signature over the
+  // exact bytes BEFORE JSON.parse and reads no bearer. Same reason, same shape; admin-api deleted
+  // its own constant and recorded why at admin-api/src/scopes.ts:53.
+  assert.equal(isDeprecatedScope('admin:audit:write'), true)
 
-  // Neither is a scope to grant...
+  // None of them is a scope to grant...
   assert.equal(LIVE_SCOPE_NAMES.includes('notify:send'), false)
   assert.equal(LIVE_SCOPE_NAMES.includes('wallet:provision'), false)
-  // ...and both still resolve, because AD-02 forbids narrowing a published union. A consumer
+  assert.equal(LIVE_SCOPE_NAMES.includes('analytics:ingest'), false)
+  assert.equal(LIVE_SCOPE_NAMES.includes('admin:audit:write'), false)
+  // ...and all still resolve, because AD-02 forbids narrowing a published union. A consumer
   // pinned to an older copy of this package keeps compiling; it simply grants nothing.
   assert.equal(isScope('notify:send'), true)
   assert.equal(isScope('wallet:provision'), true)
+  assert.equal(isScope('analytics:ingest'), true)
+  assert.equal(isScope('admin:audit:write'), true)
 
-  // The gates those surfaces really use are live, so this is not passing by amputation.
+  // The gates those surfaces really use are live, so this is not passing by amputation: notify and
+  // wallet still enforce theirs with a bearer, and the two ingest routes replaced a bearer with a
+  // MAC rather than losing a wall — analytics and admin-api both still gate their OTHER surfaces.
   assert.equal(isDeprecatedScope('notify:read'), false)
   assert.equal(isDeprecatedScope('wallet:write'), false)
-  assert.equal(LIVE_SCOPE_NAMES.length, SCOPE_NAMES.length - 2)
+  assert.equal(isDeprecatedScope('analytics:read'), false)
+  assert.equal(isDeprecatedScope('analytics:admin'), false)
+  assert.equal(isDeprecatedScope('admin:read'), false)
+  assert.equal(LIVE_SCOPE_NAMES.length, SCOPE_NAMES.length - 4)
 })
 
 test('a dead scope says why, at the length of a decision rather than a label', () => {
@@ -158,7 +184,67 @@ test('a dead scope says why, at the length of a decision rather than a label', (
       reason.length > 80,
       `${scope} is deprecated without saying what gate replaced it — that is a hole, not a decision`,
     )
+    // A length floor grades prose, and prose can be padded. The reason must also point AT the
+    // source that made the scope dead, in the form a reader can open: `<repo>/src/<file>.ts:<line>`.
+    // Every entry here died because some specific route stopped reading a bearer, and a reader in
+    // six months needs that route, not the sentence about it.
+    assert.match(
+      reason,
+      /[a-z-]+\/src\/[A-Za-z0-9_/-]+\.ts:\d+/,
+      `${scope}: deprecated with no citation of the route that made it dead — "it is not used" is a label, "server.ts:592 stopped reading a bearer" is a decision`,
+    )
   }
+})
+
+/**
+ * The coupling this package cannot see, made visible from inside it.
+ *
+ * `deprecated` is not read only by `isDeprecatedScope`. `micro-org`'s `tools/estate-scopes.mjs`
+ * parses THIS FILE'S SOURCE, textually, to decide which half of its two verdicts each scope belongs
+ * in — it has to, because it runs before any of this is compiled and against a checkout it does not
+ * build. Its test is, exactly, `/\bdeprecated:\s*\n?\s*['"`]/` against the entry's braces.
+ *
+ * So a deprecation written in a shape that regex cannot see — `deprecated: REASONS.notifySend`, a
+ * reason built by concatenation, a spec assembled by a helper — is invisible to the estate check
+ * while `isDeprecatedScope` reports it as dead. The registry would then be marked and STILL red,
+ * with a failure message telling its author to do the thing they already did. That is a whole
+ * evening, and it is cheap to prevent from here.
+ */
+test('every deprecation is written in the literal shape the estate check parses', async () => {
+  const source = await readFile(new URL('./index.ts', import.meta.url), 'utf8')
+  const from = source.indexOf('export const SCOPES')
+  const to = source.indexOf('as const', from)
+  assert.ok(from >= 0 && to > from, 'the estate check locates the registry this way and would exit 2')
+  const block = source.slice(from, to)
+
+  const seen = new Set<string>()
+  for (const match of block.matchAll(/'([a-z][a-z0-9:-]+)':\s*Object\.freeze\(\{/g)) {
+    const open = block.indexOf('{', match.index + match[0].length - 1)
+    let depth = 0
+    let end = open
+    while (end < block.length) {
+      if (block[end] === '{') depth++
+      if (block[end] === '}' && --depth === 0) break
+      end++
+    }
+    const spec = block.slice(open, end)
+    const name = match[1] ?? ''
+    seen.add(name)
+    assert.equal(
+      /\bdeprecated:\s*\n?\s*['"`]/.test(spec),
+      isDeprecatedScope(name as (typeof SCOPE_NAMES)[number]),
+      `${name}: the estate check reads this entry's deprecation differently from isDeprecatedScope — one of the two is wrong, and the one that goes red is in another repository`,
+    )
+  }
+  // And the parse saw the whole registry, not a prefix of it: an assertion loop over nothing passes.
+  //
+  // This half is not hypothetical. The estate check ends the registry at the FIRST `as const` after
+  // `export const SCOPES`, and the first draft of the deprecation above explained itself with the
+  // words "`as const` makes that string a literal TYPE" — inside a registry entry. The check then
+  // parsed ONE scope and bailed on its own floor, and every deprecation below the first became
+  // invisible. A prose sentence about a delimiter, sitting inside the thing it delimits, is the
+  // shape this line exists to catch, and the length floor above would never have seen it.
+  assert.deepEqual([...seen].sort(), [...SCOPE_NAMES].sort())
 })
 
 test('every scope names the service that enforces it and says what it permits', () => {

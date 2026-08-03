@@ -112,6 +112,18 @@ export interface Profile {
 export interface ScopeSpec {
   /** The service that enforces it. Only that service should ever check for this scope. */
   readonly service: string
+  /**
+   * What the scope permits, and normally the gate that enforces it.
+   *
+   * **When `deprecated` is set, read it first: the gate this cites may no longer exist.** These
+   * strings are literal TYPES — `SCOPES` is `as const` — so micro-org's contract-compat reads an
+   * edited one as `type-changed` and breaking (`tools/compat.ts` widens a literal only to its own
+   * primitive, which is the relaxation it added precisely for citations that must stay correct).
+   * Correcting a citation therefore means widening this field off the literal, once, deliberately,
+   * for the whole registry. Until someone does, a dead citation is superseded by `deprecated` and
+   * not deleted — an entry that lies in one field and corrects itself in the next is worse than
+   * one that cannot be edited, so the correction is stated where a reader will reach it.
+   */
   readonly description: string
   /**
    * Why this scope is dead, when it is. Present means **no gate in the estate demands it**, so a
@@ -158,6 +170,8 @@ export const SCOPES = Object.freeze({
     service: 'admin-api',
     description:
       'Mirror an audit row into the estate audit of record. Held by every service that writes audit rows; gated at admin-api/src/server.ts:510, after the envelope signature check — the signature proves the estate secret, the scope proves which service.',
+    deprecated:
+      'READ THIS BEFORE THE description ABOVE: the gate it cites is gone, and the citation is left standing only because the const assertion on this registry makes that string a literal TYPE, and micro-org\'s contract-compat judges an edited literal a breaking change to 22 consumers (tools/compat.ts widens a literal only to its own primitive). Correcting it means widening ScopeSpec[\'description\'] off the literal, which is a deliberate change to this whole registry and not part of closing this scope. — No gate demands it and none can. It gated POST /v1/events, admin-api\'s intake for the estate\'s audit of record, and that route is now MAC-ONLY: verifyDelivery checks cf-signature over the exact bytes received BEFORE JSON.parse is called on them, and no Authorization header is read at all (admin-api/src/server.ts:592). The bearer was not a second wall next to the MAC, it was an unobtainable one. Every producer on that route is an outbox relay — a background job woken by a Postgres poll, with no session and no way to mint a token — and all twenty-one relay outbox.ts files in the estate were read rather than assumed: each sends the delivery signature and the event id and NOTHING else. So the mirror for all 26 audited topics received nothing, ever, while this scope named a capability exercised zero times; deploy/README.md:183 had already recorded that as making 17 §7 claim 9 unpassable. The MAC is also the stronger of the two statements, not merely the obtainable one: a bearer proves who opened the socket and nothing about the bytes, a signature over the raw bytes proves the content was produced by a holder of the estate outbox secret, which is the thing an audit row is. WHAT WAS GIVEN UP, PLAINLY: `source` used to be the scope-checked principal\'s service name and an envelope whose producer disagreed was refused; `source` is now event.producer, so any holder of the estate outbox secret can mirror a row attributed to any producer. validateEnvelope still requires the producer to own the topic namespace, and the secret is held only by services — never a browser, never an operator. The honest repair is a per-producer signing secret, a micro-deploy and contracts-events change, reported there. admin-api deleted its own constant on this reasoning and wrote down why at admin-api/src/scopes.ts:53, following micro-notify\'s notify:ingest. Revive this only in the same commit as a route that reads a bearer.',
   }),
   'admin:read': Object.freeze({
     service: 'admin-api',
@@ -188,6 +202,8 @@ export const SCOPES = Object.freeze({
     service: 'analytics',
     description:
       'Deliver signed analytics events to /v1/ingest. Gated at analytics/src/server.ts:459, before the payload signature is verified.',
+    deprecated:
+      'READ THIS BEFORE THE description ABOVE: the gate it cites is gone, and the citation is left standing only because the const assertion on this registry makes that string a literal TYPE, and micro-org\'s contract-compat judges an edited literal a breaking change to 22 consumers (tools/compat.ts widens a literal only to its own primitive). Correcting it means widening ScopeSpec[\'description\'] off the literal, which is a deliberate change to this whole registry and not part of closing this scope. — No gate demands it and none can. It gated POST /ingest, the only route that creates an analytics row, and that route is now MAC-ONLY: the handler reads the raw bytes, verifies cf-signature over exactly those bytes, and only then parses (analytics/src/server.ts:514). The order is the security property — parsing first would put a parser in front of the authentication, reachable by anyone who can open a socket — and no Authorization header is read, so no scope can gate it. The bearer was never obtainable: every producer is an outbox relay woken by a Postgres poll, with no session to mint a token from, and all twenty-one outbox.ts files in the estate were read, not assumed — each sends the delivery signature and the event id and nothing else. It was MEASURED against the running estate before it was changed: a correctly signed POST /ingest carrying no Authorization answered 401 unauthenticated, so every event bound for analytics died at that line while the service reported itself healthy and the onboarding denominator every funnel metric divides by stayed empty. Removing it weakens nothing, because a bearer proves who opened the socket and proves nothing about the bytes, while the MAC proves the bytes came from a holder of the estate outbox secret — a strictly stronger statement about the only thing that matters here, the content of the row. A signed-in person still cannot reach the route: a person does not hold that secret. analytics deleted its own SCOPE_INGEST constant on this reasoning and wrote down why at analytics/src/server.ts:119, following micro-notify, which deleted notify:ingest rather than registering it after the same repair (notify/src/server.ts:99). Revive this only in the same commit as a route that reads a bearer.',
   }),
   'analytics:read': Object.freeze({
     service: 'analytics',
@@ -462,6 +478,15 @@ export function scopeSpec(scope: Scope): ScopeSpec {
  * rewritten to demand a different one, stays here looking exactly like a live capability. The
  * 2026-08-03 audit found two, and the inventory pin in `index.test.ts` was protecting rather than
  * catching them, having been written from this registry rather than from the gates.
+ *
+ * That direction is now mechanical, and it is what added the third and fourth entries.
+ * `micro-org`'s `estate-ci.yml` clones all 56 repositories, runs `service-ci.yml`'s OWN scope
+ * derivation against each, and unions the demands — the one checkout that can see every gate. It
+ * issues two verdicts, and the second is why `deprecated` is a claim and not a label: a LIVE scope
+ * nothing demands is red, and a `deprecated` scope something DOES demand is also red, because
+ * `deprecated` asserts "no gate demands it" and a gate that appears makes the registry's own
+ * sentence false. Marking an entry here therefore does not silence the check; it moves the entry to
+ * the other half of it, where reviving the capability without reviving the entry goes red.
  */
 export function isDeprecatedScope(scope: Scope): boolean {
   return scopeSpec(scope).deprecated !== undefined
