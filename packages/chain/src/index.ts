@@ -86,6 +86,79 @@ export function assertIssuable(asset: AssetCode): IssuableAssetCode {
   return asset as IssuableAssetCode
 }
 
+/* ─────────────────────────────────────────────────── Explorer links, one network at a time */
+
+declare const explorerTable: unique symbol
+
+/**
+ * Per-network explorer prefixes, where **no explorer may stand for more than one network**.
+ *
+ * Branded, and the brand is the point: the only way to obtain one of these is `explorers()`
+ * below, so the rule cannot be sidestepped by writing an object literal into a `ChainSpec`. A
+ * plain `Record<Network, string | null>` was sidestepped exactly that way — see `explorers()`.
+ */
+export type ExplorerTxUrls = Readonly<Record<Network, string | null>> & {
+  readonly [explorerTable]: true
+}
+
+declare const distinctExplorers: unique symbol
+
+/**
+ * The compile error for naming one explorer on two networks. Unconstructable on purpose — there
+ * is no value of this type, so the argument it is demanded as can never be supplied.
+ */
+export type MainnetAndTestnetExplorersMustDiffer = { readonly [distinctExplorers]: never }
+
+/**
+ * `[]` when the two networks name different explorers (or neither names one), and an
+ * unsatisfiable argument list when they name the same one.
+ *
+ * `[M] extends [T]` rather than `M extends T` so a union never distributes; two nulls are the one
+ * equal pair that is allowed, because a pair of nulls produces no link at all rather than the
+ * wrong link.
+ */
+type ExplorerGuard<M, T> = [M] extends [T]
+  ? [M] extends [null]
+    ? []
+    : [MainnetAndTestnetExplorersMustDiffer]
+  : []
+
+/**
+ * Declare a chain's explorer, per network, and **fail the build if one URL serves both.**
+ *
+ * This exists because of a live defect: EMBER's mainnet and testnet prefixes were the same
+ * literal string, so `explorerTxUrl('EMBER', 'testnet', h)` handed the user a **mainnet** explorer
+ * link for a testnet hash. Nothing errored. The page loaded. It simply said the transaction did
+ * not exist — the shape of failure that reads as "my funds are gone" rather than as "this link is
+ * wrong", and the one the estate is about to multiply by standing testnet up beside mainnet on
+ * the same apex.
+ *
+ * A test asserting the two differ would have caught it and been the ordinary answer. It is not
+ * the answer here, because the table it guards is data and the next person to add a chain writes
+ * a row rather than a test. The constraint therefore sits on the *constructor for the row*: an
+ * asset whose two networks share an explorer cannot be written down, so there is no state for a
+ * check to be late to.
+ *
+ * Both `null` is permitted and means "this chain has no explorer we can link to" — see SOL and
+ * SHARD below. That is not the defect in the other direction: a null produces no link, and a
+ * missing link cannot send anybody to the wrong chain.
+ *
+ * **What the failure looks like.** The two URLs being equal makes the third parameter demanded and
+ * unsatisfiable, so `tsc` says `Expected 3 arguments, but got 2` at the offending row. That reads
+ * oddly until you know why, which is what the parameter is named for: hovering the call shows
+ * `..._explorersMustDifferPerNetwork`, and this comment is the rest of the answer.
+ */
+export function explorers<M extends string | null, T extends string | null>(
+  mainnet: M,
+  testnet: T,
+  ..._explorersMustDifferPerNetwork: ExplorerGuard<M, T>
+): ExplorerTxUrls {
+  // The brand is a type and nothing else: it has no runtime representation, so the assertion adds
+  // no property and the frozen object is exactly the two networks.
+  const table: Readonly<Record<Network, string | null>> = Object.freeze({ mainnet, testnet })
+  return table as ExplorerTxUrls
+}
+
 export interface ChainSpec {
   readonly asset: AssetCode
   readonly family: ChainFamily
@@ -104,7 +177,8 @@ export interface ChainSpec {
   readonly reorgAlarmDepth: number
   /** Chain id where the family has one. Ember mainnet is 7411, testnet 7412. */
   readonly chainId?: Readonly<Record<Network, number>>
-  readonly explorerTxUrl: Readonly<Record<Network, string | null>>
+  /** Built by `explorers()`, which is the only thing that can build one. */
+  readonly explorerTxUrl: ExplorerTxUrls
 }
 
 /**
@@ -123,10 +197,14 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
     confirmations: 60,
     reorgAlarmDepth: 5,
     chainId: Object.freeze({ mainnet: 7411, testnet: 7412 }),
-    explorerTxUrl: Object.freeze({
-      mainnet: 'https://explorer.cloudsforge.online/#/tx/',
-      testnet: 'https://explorer.cloudsforge.online/#/tx/',
-    }),
+    // The two environments run side by side on one host under one apex: mainnet at
+    // `cloudsforge.online`, testnet at `testnet.cloudsforge.online`. Both explorers are real and
+    // both are served — `micro-deploy/cloudflared/config.mainnet.public.yml:76` and
+    // `config.testnet.public.yml:76`. Until now this said the mainnet host twice.
+    explorerTxUrl: explorers(
+      'https://explorer.cloudsforge.online/#/tx/',
+      'https://explorer.testnet.cloudsforge.online/#/tx/',
+    ),
   }),
   ETH: Object.freeze({
     asset: 'ETH',
@@ -136,10 +214,7 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
     confirmations: 12,
     reorgAlarmDepth: 3,
     chainId: Object.freeze({ mainnet: 1, testnet: 11155111 }),
-    explorerTxUrl: Object.freeze({
-      mainnet: 'https://etherscan.io/tx/',
-      testnet: 'https://sepolia.etherscan.io/tx/',
-    }),
+    explorerTxUrl: explorers('https://etherscan.io/tx/', 'https://sepolia.etherscan.io/tx/'),
   }),
   BTC: Object.freeze({
     asset: 'BTC',
@@ -148,10 +223,7 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
     decimals: 8,
     confirmations: 3,
     reorgAlarmDepth: 2,
-    explorerTxUrl: Object.freeze({
-      mainnet: 'https://mempool.space/tx/',
-      testnet: 'https://mempool.space/testnet/tx/',
-    }),
+    explorerTxUrl: explorers('https://mempool.space/tx/', 'https://mempool.space/testnet/tx/'),
   }),
   SOL: Object.freeze({
     asset: 'SOL',
@@ -160,10 +232,13 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
     decimals: 9,
     confirmations: 32,
     reorgAlarmDepth: 8,
-    explorerTxUrl: Object.freeze({
-      mainnet: 'https://solscan.io/tx/',
-      testnet: 'https://solscan.io/tx/',
-    }),
+    // THE SAME DEFECT AS EMBER'S, found by the constructor above rather than reported: both
+    // networks said `https://solscan.io/tx/`, so a testnet signature was handed to a page that
+    // reads mainnet-beta. It is null rather than corrected because Solana's explorers select the
+    // cluster with a QUERY parameter — `…/tx/<sig>?cluster=testnet` — which a prefix cannot carry,
+    // this field being a prefix that `explorerTxUrl()` concatenates a hash onto. Null costs the
+    // link; the old value spent it on the wrong cluster.
+    explorerTxUrl: explorers('https://solscan.io/tx/', null),
   }),
   XRP: Object.freeze({
     asset: 'XRP',
@@ -172,10 +247,10 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
     decimals: 6,
     confirmations: 1,
     reorgAlarmDepth: 1,
-    explorerTxUrl: Object.freeze({
-      mainnet: 'https://livenet.xrpl.org/transactions/',
-      testnet: 'https://testnet.xrpl.org/transactions/',
-    }),
+    explorerTxUrl: explorers(
+      'https://livenet.xrpl.org/transactions/',
+      'https://testnet.xrpl.org/transactions/',
+    ),
   }),
   // RETIRED — `RETIRED_ASSETS`. The spec stays because the ledger still supervises 114 live SHARD
   // accounts and `chainSpec('SHARD')` must keep answering for them; `decimals: 0` in particular is
@@ -189,7 +264,7 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
     decimals: 0,
     confirmations: 0,
     reorgAlarmDepth: 0,
-    explorerTxUrl: Object.freeze({ mainnet: null, testnet: null }),
+    explorerTxUrl: explorers(null, null),
   }),
 })
 

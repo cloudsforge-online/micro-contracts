@@ -14,6 +14,7 @@ import {
   coinAmountForShards,
   coinAmountForUsdCents,
   explorerTxUrl,
+  explorers,
   formatAmount,
   fromSparks,
   isConfirmed,
@@ -167,6 +168,54 @@ test('explorer links differ per network, and Shards have none', () => {
   assert.match(explorerTxUrl('ETH', 'mainnet', '0xabc') ?? '', /etherscan\.io\/tx\/0xabc/)
   assert.match(explorerTxUrl('ETH', 'testnet', '0xabc') ?? '', /sepolia/)
   assert.equal(explorerTxUrl('SHARD', 'mainnet', 'x'), null)
+})
+
+test("an EMBER testnet link goes to the TESTNET explorer, not the one that says 'not found'", () => {
+  // The defect this replaces: both networks named `explorer.cloudsforge.online`, so every testnet
+  // hash was linked into the mainnet explorer, which cannot know it. The two environments stand
+  // side by side under one apex — `micro-deploy/cloudflared/config.testnet.public.yml:76` serves
+  // `explorer.testnet.cloudsforge.online` — so the testnet link has somewhere real to point.
+  assert.equal(
+    explorerTxUrl('EMBER', 'testnet', '0xdead'),
+    'https://explorer.testnet.cloudsforge.online/#/tx/0xdead',
+  )
+  assert.equal(
+    explorerTxUrl('EMBER', 'mainnet', '0xdead'),
+    'https://explorer.cloudsforge.online/#/tx/0xdead',
+  )
+})
+
+test('no chain lends one explorer to two networks — asserted over every chain, not just EMBER', () => {
+  // `explorers()` makes this unwritable, so this test cannot fail while the table is built by it.
+  // It is here for the case the type is worked around with a cast, and because it states in one
+  // place the rule the constructor enforces in another.
+  for (const spec of Object.values(CHAINS)) {
+    const { mainnet, testnet } = spec.explorerTxUrl
+    if (mainnet === null || testnet === null) continue
+    assert.notEqual(mainnet, testnet, `${spec.asset} points both networks at ${mainnet}`)
+  }
+})
+
+test('SOL has no testnet explorer link rather than a mainnet one', () => {
+  // Solana's explorers choose the cluster with `?cluster=`, a query this prefix cannot carry. No
+  // link is the honest answer; the previous one opened mainnet-beta for a testnet signature.
+  assert.equal(explorerTxUrl('SOL', 'testnet', 'sig'), null)
+  assert.equal(explorerTxUrl('SOL', 'mainnet', 'sig'), 'https://solscan.io/tx/sig')
+})
+
+test('a chain that names one explorer twice does not compile', () => {
+  // THIS IS A TYPE ASSERTION, and it is the actual guard — the runtime tests above can only see a
+  // table that already exists, whereas this fails at the moment somebody writes the bad row. If
+  // `explorers()` ever stops rejecting a repeated URL, `@ts-expect-error` becomes an unused
+  // suppression and `tsc --noEmit` fails on THIS LINE. A test that cannot fail is not a check;
+  // this one fails in both directions.
+  // @ts-expect-error mainnet and testnet may not name the same explorer
+  explorers('https://example.test/tx/', 'https://example.test/tx/')
+
+  // ...and a genuinely distinct pair is accepted, so the rejection above is about the equality
+  // rather than about the call shape.
+  const ok = explorers('https://a.test/tx/', 'https://b.test/tx/')
+  assert.equal(ok.testnet, 'https://b.test/tx/')
 })
 
 /* ═══════════════════════════════════════════ Sparks, and the asset code they must never become */
