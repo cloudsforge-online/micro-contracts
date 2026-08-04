@@ -1,18 +1,27 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import {
   CHAINS,
+  EMBER_DECIMALS,
   ON_CHAIN_ASSETS,
   RATE_SCALE,
   SHARDS_PER_USD,
+  SPARK_DECIMALS,
+  WEI_PER_SPARK,
+  assertIssuable,
   chainSpec,
   coinAmountForShards,
+  coinAmountForUsdCents,
   explorerTxUrl,
   formatAmount,
+  fromSparks,
   isConfirmed,
   isReorgAlarming,
+  isRetiredAsset,
   parseAmount,
   shardsForCoinAmount,
+  toSparks,
   txUrn,
   type AssetCode,
 } from './index.ts'
@@ -158,4 +167,101 @@ test('explorer links differ per network, and Shards have none', () => {
   assert.match(explorerTxUrl('ETH', 'mainnet', '0xabc') ?? '', /etherscan\.io\/tx\/0xabc/)
   assert.match(explorerTxUrl('ETH', 'testnet', '0xabc') ?? '', /sepolia/)
   assert.equal(explorerTxUrl('SHARD', 'mainnet', 'x'), null)
+})
+
+/* ═══════════════════════════════════════════ Sparks, and the asset code they must never become */
+
+test('SPARK is not an asset code anywhere in this file — the source is the assertion', async () => {
+  // The same guard `tessera/src/sparks.ts` keeps over itself, kept here because this file is where
+  // an asset code would actually be added. It greps the SOURCE rather than the exports, because
+  // the failure being prevented is somebody typing `| 'SPARK'` into the union — which a test over
+  // the compiled surface would happily accept.
+  const source = await readFile(new URL('./index.ts', import.meta.url), 'utf8')
+
+  // Any string literal 'SPARK' or "SPARK", and any use as a union member or record key. Prose
+  // about Sparks is fine and there is a lot of it; a quoted asset code is not.
+  assert.equal(
+    /['"`]SPARK['"`]/.test(source),
+    false,
+    "'SPARK' appears as a string literal — a Spark is a display denomination of EMBER and must never be a second asset code (ledger/src/migrations.ts:302-313)",
+  )
+  assert.equal(
+    (ON_CHAIN_ASSETS as readonly string[]).includes('SPARK'),
+    false,
+    'SPARK reached ON_CHAIN_ASSETS',
+  )
+  assert.equal(Object.keys(CHAINS).includes('SPARK'), false, 'SPARK reached CHAINS')
+})
+
+test('a Spark is 10^-6 EMBER, derived from the chain spec rather than typed', () => {
+  assert.equal(SPARK_DECIMALS, 6)
+  // The point of the derivation: change CHAINS.EMBER.decimals and this fails rather than drifting.
+  assert.equal(EMBER_DECIMALS, CHAINS.EMBER.decimals)
+  assert.equal(WEI_PER_SPARK, 10n ** 12n)
+  assert.equal(WEI_PER_SPARK, 10n ** BigInt(CHAINS.EMBER.decimals - SPARK_DECIMALS))
+})
+
+test('Spark conversion round-trips, and a sub-Spark remainder is refused not rounded', () => {
+  assert.equal(fromSparks(400n), 400_000_000_000_000n)
+  assert.equal(toSparks(fromSparks(400n)), 400n)
+  // One wei short of a whole Spark. Silently flooring this is how a price loses its last digit.
+  assert.throws(() => toSparks(WEI_PER_SPARK - 1n), /not a whole number of Sparks/)
+  assert.equal(toSparks(0n), 0n)
+})
+
+/* ═════════════════════════════════════════════════════ SHARD's retirement, enforced by the type */
+
+test('SHARD is retired: still nameable, never newly issuable', () => {
+  // Nameable — the ledger supervises 114 live SHARD accounts and must keep being able to ask.
+  assert.equal(chainSpec('SHARD').decimals, 0)
+  assert.equal(isRetiredAsset('SHARD'), true)
+
+  // Not issuable. This is the guard that replaces deleting the union member.
+  assert.throws(() => assertIssuable('SHARD'), /retired/)
+  for (const asset of ON_CHAIN_ASSETS) {
+    assert.equal(isRetiredAsset(asset), false, `${asset} was reported retired`)
+    assert.equal(assertIssuable(asset), asset)
+  }
+})
+
+test('SHARD and EMBER do not share a scale, which is why relabelling is not converting', () => {
+  // 250 Shards is $2.50. The same integer read as EMBER is 250 wei — 2.5e-16 EMBER. A migration
+  // that changed only `asset_code` would move a price by eighteen orders of magnitude.
+  assert.equal(chainSpec('SHARD').decimals, 0)
+  assert.equal(chainSpec('EMBER').decimals, 18)
+  assert.notEqual(chainSpec('SHARD').decimals, chainSpec('EMBER').decimals)
+})
+
+/* ══════════════════════════════════════════════════════════ USD → coin, the peg's replacement */
+
+test('a USD price converts to coin at the administered rate', () => {
+  // EMBER's administered price is 0.25 USD (pricing/src/migrations.ts:185) = 250000 scaled.
+  const quarter = 250_000n
+  // $2.50 = 250 cents. At $0.25/EMBER that is 10 EMBER.
+  assert.equal(coinAmountForUsdCents(250n, 18, quarter), 10n * 10n ** 18n)
+  // $89.99 at $0.25 is 359.96 EMBER.
+  assert.equal(coinAmountForUsdCents(8_999n, 18, quarter), 359_960_000_000_000_000_000n)
+})
+
+test('a positive price never converts to zero — that would be a free purchase', () => {
+  // One cent at an absurd rate. Flooring reaches 0n, and 0n here is the BigInt('') defect wearing
+  // a different hat: a purchase that posts nothing and grants the entitlement anyway.
+  assert.throws(() => coinAmountForUsdCents(1n, 0, 10n ** 12n), /converts to zero/)
+  // Zero for zero is fine and is not the same thing.
+  assert.equal(coinAmountForUsdCents(0n, 18, 250_000n), 0n)
+})
+
+test('coinAmountForUsdCents rounds down, in the payer’s favour', () => {
+  // A rate that does not divide evenly. Down means the platform collects at most the stated price.
+  const rate = 333_333n // $0.333333
+  const amount = coinAmountForUsdCents(100n, 18, rate)
+  const exact = (100n * 10n ** 18n * RATE_SCALE) / (rate * 100n)
+  assert.equal(amount, exact)
+  assert.ok(amount * rate * 100n <= 100n * 10n ** 18n * RATE_SCALE)
+})
+
+test('coinAmountForUsdCents refuses a negative price and a non-positive rate', () => {
+  assert.throws(() => coinAmountForUsdCents(-1n, 18, 250_000n), /must not be negative/)
+  assert.throws(() => coinAmountForUsdCents(100n, 18, 0n), /must be positive/)
+  assert.throws(() => coinAmountForUsdCents(100n, 18, -1n), /must be positive/)
 })

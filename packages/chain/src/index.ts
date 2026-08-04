@@ -1,13 +1,22 @@
 /**
  * Chain families, confirmation policy, and smallest-unit amount arithmetic.
  *
- * **This is the narrowest package in the set, and it is exact-pinned by every consumer.**
+ * **This is the narrowest package in the set, and every consumer shares it at HEAD.**
  *
  * `wallet`, `settlement`, `custody` and `indexer` must agree byte-for-byte on the values in this
  * file. A skew in `RATE_SCALE`, in a confirmation depth, or in the rounding direction of
  * `shardsForCoinAmount` is not a 500 — it is money credited at the wrong depth, or a balance that
- * silently disagrees with the chain. That is a financial incident, so this package is pinned to
- * an exact version rather than a caret range, and a change to it is a coordinated release.
+ * silently disagrees with the chain. That is a financial incident, and a change to it is a
+ * coordinated release.
+ *
+ * **The old wording here said the package "is pinned to an exact version rather than a caret
+ * range". Measured, that is not true and has not been:** every consumer resolves it as
+ * `link:../contracts/packages/chain` (`wallet`, `settlement`, `custody`, `ledger`, `billing`,
+ * `trade`, `mint`, `pricing`, `community`, `foresight`, and `indexer` via `file:`), and CI checks
+ * micro-contracts out at `main` with no `ref:` (`org/.github/workflows/service-ci.yml:160`). So a
+ * change here reaches every consumer on their next run, with no version to stage behind. That
+ * makes the coordination real rather than notional, and it is why `SHARD` is deprecated in place
+ * below instead of deleted.
  *
  * Everything here is pure. No I/O, no dependencies, no environment.
  */
@@ -16,7 +25,66 @@ export type ChainFamily = 'evm' | 'ember' | 'solana' | 'bitcoin' | 'xrp'
 
 export type Network = 'mainnet' | 'testnet'
 
+/**
+ * Every asset code the estate can name — **including the one it is retiring.**
+ *
+ * `SHARD` is still here, and the reason is a measurement rather than an opinion. Shards sit
+ * outside the estate's central guarantee (no balance may exist that the chain does not back),
+ * which is why they are being removed; but the live ledger holds **114 SHARD accounts summing to
+ * 132,000 units** right now. `ledger/src/jobs.ts:175` maps `SHARD` onto the synthetic `platform`
+ * chain so that reconciliation still watches those accounts, and the reconcile job is typed
+ * against this union. Delete the member today and the ledger can no longer *name* the asset it is
+ * supervising — 132,000 units of real liability stop being reconciled at all. That is not a step
+ * towards the guarantee, it is the guarantee switched off, so the member stays until the balances
+ * are drained to zero.
+ *
+ * Nothing may be newly denominated in it. That is `IssuableAssetCode` below, and it is a type
+ * rather than a comment because a comment does not fail a build.
+ *
+ * The removal is a coordinated release, not a unilateral one: every consumer resolves this package
+ * by `link:../contracts/packages/chain` and CI checks micro-contracts out at `main` unpinned
+ * (`org/.github/workflows/service-ci.yml:160`), so the union is shared at HEAD by roughly a dozen
+ * repositories at once — see the header, which used to claim otherwise.
+ */
 export type AssetCode = 'EMBER' | 'BTC' | 'ETH' | 'SOL' | 'XRP' | 'SHARD'
+
+/**
+ * The assets that are being wound down. Nothing may be newly denominated in one.
+ *
+ * Retired is not the same as unknown: `CHAINS` still describes a retired asset, `chainSpec` still
+ * answers for it, and the ledger still reconciles it. What changes is that no NEW liability may be
+ * created in it, which is a property of the write paths rather than of the read paths.
+ */
+export const RETIRED_ASSETS: readonly AssetCode[] = Object.freeze(['SHARD'])
+
+/**
+ * An asset something may be **newly** denominated in.
+ *
+ * Written as `Exclude<AssetCode, 'SHARD'>` rather than as a second hand-typed union, so that
+ * removing `SHARD` from `AssetCode` later empties this automatically instead of leaving a stale
+ * duplicate behind. A service that types its settlement asset as this — `micro-billing` now does —
+ * gets a compile error if anyone tries to route a purchase back through Shards.
+ */
+export type IssuableAssetCode = Exclude<AssetCode, 'SHARD'>
+
+/** Is this asset wound down? The single question every write path asks before denominating. */
+export function isRetiredAsset(asset: AssetCode): boolean {
+  return RETIRED_ASSETS.includes(asset)
+}
+
+/**
+ * Narrow an arbitrary asset code to one that may be newly denominated, or throw.
+ *
+ * The throw is the point. A retired asset arriving on a write path is a configuration error that
+ * should stop the request, not a value to be coerced into something plausible — coercion here is
+ * how an amount ends up denominated in an asset with the wrong number of decimals.
+ */
+export function assertIssuable(asset: AssetCode): IssuableAssetCode {
+  if (isRetiredAsset(asset)) {
+    throw new RangeError(`${asset} is retired and may not denominate anything new`)
+  }
+  return asset as IssuableAssetCode
+}
 
 export interface ChainSpec {
   readonly asset: AssetCode
@@ -109,6 +177,11 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
       testnet: 'https://testnet.xrpl.org/transactions/',
     }),
   }),
+  // RETIRED — `RETIRED_ASSETS`. The spec stays because the ledger still supervises 114 live SHARD
+  // accounts and `chainSpec('SHARD')` must keep answering for them; `decimals: 0` in particular is
+  // load-bearing, because it is the only thing that says a stored `250` means 250 Shards and not
+  // 250 wei. Anything that re-denominates a Shard amount has to read this, or it changes the scale
+  // of stored money by a factor of 10¹⁸ without saying so.
   SHARD: Object.freeze({
     asset: 'SHARD',
     family: 'evm', // never used on chain; present so the record is total
@@ -142,7 +215,104 @@ export function chainSpec(asset: AssetCode): ChainSpec {
  */
 export const RATE_SCALE = 1_000_000n
 
-/** Shards per US dollar. 100 Shards = 1 USD, fixed. */
+/* ───────────────────────────────────────────────────────────── Sparks, the display denomination */
+
+/**
+ * **A Spark is a display denomination of EMBER. It is not a second asset code and must never
+ * become one.**
+ *
+ * This is `tessera/src/sparks.ts`'s rule, promoted here because it is not tessera's rule — it is
+ * the estate's, and a rule that lives in one service is a rule the next service does not know
+ * about. The reason is the ledger's balancing invariant, which is enforced **per `asset_code`** by
+ * trigger (`ledger/src/migrations.ts:302-313`). A Spark asset code would satisfy that trigger
+ * independently of `EMBER`, so the two halves of one pile of money could drift apart with nothing
+ * able to notice — and reconciling them again would need a rate between an internal unit and a
+ * chain asset, which is exactly the mechanism that mints liability against nothing.
+ *
+ * One asset, one trial balance, one number to reconcile against the chain. `index.test.ts` greps
+ * this file to keep that code from ever appearing as a quoted string literal — which is the exact
+ * edit that would add it to the union. The identifiers below are named for the denomination and
+ * are deliberately not string literals.
+ */
+export const SPARK_DECIMALS = 6
+
+/** EMBER's decimals, named once so the Spark arithmetic below cannot drift from `CHAINS.EMBER`. */
+export const EMBER_DECIMALS = 18
+
+/**
+ * One Spark, in wei. `10 ** (18 - 6)` = 10¹².
+ *
+ * Computed from the two exponents rather than written as a literal, because a literal with twelve
+ * zeros in it is a literal somebody eventually types with eleven. `index.test.ts` asserts it
+ * against `CHAINS.EMBER.decimals` so the constant cannot outlive a change to the chain spec.
+ */
+export const WEI_PER_SPARK = 10n ** BigInt(EMBER_DECIMALS - SPARK_DECIMALS)
+
+/** Wei to whole Sparks, for display. Throws on a sub-Spark remainder rather than hiding it. */
+export function toSparks(wei: bigint): bigint {
+  if (wei % WEI_PER_SPARK !== 0n) {
+    throw new RangeError(`${wei} wei is not a whole number of Sparks`)
+  }
+  return wei / WEI_PER_SPARK
+}
+
+/** Sparks to wei. The direction a client's "400 Sparks" arrives in. */
+export function fromSparks(sparks: bigint): bigint {
+  return sparks * WEI_PER_SPARK
+}
+
+/* ────────────────────────────────────────────────────────── USD, and the retirement of the peg */
+
+/** USD is held as cents. Two places, integer, always — the same unit `contracts-money` uses. */
+export const USD_CENTS_DECIMALS = 2
+
+/**
+ * A coin amount, in smallest units, for a price stated in **US cents**.
+ *
+ * This is the conversion that replaces the Shard peg. A price is durable in USD and the coin
+ * amount is a settlement-time question, because there is no market price for EMBER — Hearth has no
+ * exchange listing, so `micro-pricing` carries an *administered* number for it
+ * (`pricing/src/rates.ts:55`, seeded at 0.25 USD in `pricing/src/migrations.ts:185`). An
+ * administered rate is a figure an operator typed. Storing a price in EMBER against it would mean
+ * that editing that figure silently restates every stated dollar price in the catalogue, which is
+ * precisely the silent revaluation this estate is trying to stop.
+ *
+ * **Rounds down**, matching the direction rule already used above: dust falls in the payer's
+ * favour and is visible to reconciliation, never in the platform's favour and invisible.
+ *
+ * **A positive price must never convert to zero.** Rounding down can reach `0n` for a small enough
+ * price or a large enough rate, and `0n` here is a free purchase — the same shape of defect as
+ * `BigInt('')` being `0n`. So it throws instead, and the caller decides. Callers must not paper
+ * over this with `|| someDefault`.
+ */
+export function coinAmountForUsdCents(
+  cents: bigint,
+  decimals: number,
+  usdPerCoinScaled: bigint,
+): bigint {
+  if (cents < 0n) throw new RangeError('cents must not be negative')
+  if (usdPerCoinScaled <= 0n) throw new RangeError('rate must be positive')
+  const multiplier = 10n ** BigInt(decimals)
+  const centsPerCoinScaled = usdPerCoinScaled * 10n ** BigInt(USD_CENTS_DECIMALS)
+  const amount = (cents * multiplier * RATE_SCALE) / centsPerCoinScaled
+  if (amount === 0n && cents > 0n) {
+    throw new RangeError(
+      `a price of ${cents} cents converts to zero smallest units at this rate — refusing to price something at nothing`,
+    )
+  }
+  return amount
+}
+
+/**
+ * Shards per US dollar. 100 Shards = 1 USD, fixed.
+ *
+ * @deprecated Shards are being retired. This constant survives for two reasons and no others:
+ * `micro-pricing` still publishes a Shard column from it (`pricing/src/rates.ts:202`), and it is
+ * the peg that the one-time re-denomination of `micro-billing`'s catalogue was computed against
+ * (billing migration 11). Because the peg is exactly 100 Shards to 100 cents, that conversion is
+ * the identity on the stored integer — see the migration, which argues it. Use
+ * `coinAmountForUsdCents` for anything new.
+ */
 export const SHARDS_PER_USD = 100n
 
 /**
@@ -151,6 +321,11 @@ export const SHARDS_PER_USD = 100n
  * **Rounds down, always.** Rounding a credit up mints Shards that no coin backs; over enough
  * conversions that is a growing, invisible liability. Rounding down leaves dust in the user's
  * favour on the coin side, which reconciliation can see.
+ *
+ * @deprecated Shards are being retired — see `AssetCode`. This is retained because
+ * `micro-pricing` still derives a Shard column from it and `contracts-money`'s `moneyForShards`
+ * still calls it; both are read paths over an asset that is being wound down, not new issuance.
+ * Nothing new should convert *into* Shards.
  */
 export function shardsForCoinAmount(
   smallestUnits: bigint,
@@ -163,7 +338,13 @@ export function shardsForCoinAmount(
   return (smallestUnits * usdPerCoinScaled * SHARDS_PER_USD) / (divisor * RATE_SCALE)
 }
 
-/** The inverse. Also rounds down, so a user is never given more coin than their Shards buy. */
+/**
+ * The inverse. Also rounds down, so a user is never given more coin than their Shards buy.
+ *
+ * @deprecated Shards are being retired — see `AssetCode`. Use `coinAmountForUsdCents`, which
+ * converts from the durable USD figure directly and does not route a price through an internal
+ * unit that has no chain behind it.
+ */
 export function coinAmountForShards(
   shards: bigint,
   decimals: number,
