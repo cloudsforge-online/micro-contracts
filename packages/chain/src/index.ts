@@ -46,7 +46,7 @@ export type Network = 'mainnet' | 'testnet'
  * (`org/.github/workflows/service-ci.yml:160`), so the union is shared at HEAD by roughly a dozen
  * repositories at once — see the header, which used to claim otherwise.
  */
-export type AssetCode = 'EMBER' | 'BTC' | 'ETH' | 'SOL' | 'XRP' | 'SHARD'
+export type AssetCode = 'EMBER' | 'BTC' | 'ETH' | 'SOL' | 'XRP' | 'LTC' | 'SHARD'
 
 /**
  * The assets that are being wound down. Nothing may be newly denominated in one.
@@ -216,14 +216,55 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
     chainId: Object.freeze({ mainnet: 1, testnet: 11155111 }),
     explorerTxUrl: explorers('https://etherscan.io/tx/', 'https://sepolia.etherscan.io/tx/'),
   }),
+  // CONFIRMATIONS WERE RAISED FROM 3 TO 6 WHEN NATIVE DEPOSITS WERE BUILT, and the number is the
+  // only one in this file that was ever a placeholder rather than a decision. Three is roughly
+  // thirty minutes and is below what any custodian uses for Bitcoin; it was also, absurdly, twenty
+  // times more relaxed than the depth this same file applies to the platform's own chain. Six is
+  // the industry convention, it is what the network's own economics are usually argued against,
+  // and crediting a stranger's deposit before it is final is not a latency optimisation — it is
+  // giving away money that a reorg then takes back.
+  //
+  // CHANGING IT IS FREE TODAY AND WILL NOT BE LATER. `INDEXER_CHAINS` is unset in the estate, so no
+  // Bitcoin block has ever been indexed and no BTC deposit has ever been credited at three. There
+  // is no in-flight deposit to be re-judged by the new number and no reconciliation to restate.
+  // The same edit after the first real deposit is a migration; here it is a constant.
   BTC: Object.freeze({
     asset: 'BTC',
     family: 'bitcoin',
     name: 'Bitcoin',
     decimals: 8,
-    confirmations: 3,
+    confirmations: 6,
+    // Still strictly below `confirmations`, which is the property the estate relies on: a reorg deep
+    // enough to retract a CREDITED movement is always deep enough to have halted the chain first.
     reorgAlarmDepth: 2,
     explorerTxUrl: explorers('https://mempool.space/tx/', 'https://mempool.space/testnet/tx/'),
+  }),
+  /**
+   * Litecoin. Bitcoin's family, not Bitcoin's constants.
+   *
+   * `family: 'bitcoin'` is the whole point and it is load-bearing: Litecoin Core answers the same
+   * JSON-RPC the Bitcoin worker already speaks (`getblockchaininfo`, `getblockcount`,
+   * `getblockhash`, `getblock`, `getrawtransaction`), its transaction structure is Bitcoin's, and
+   * its addresses are emitted BY THE NODE rather than derived by the indexer — so the follower, the
+   * reorg repair, the RBF handling and the UTXO extraction are reused rather than reimplemented.
+   * What is NOT shared is address encoding, which lives in custody and settlement as a network
+   * parameter table (different version bytes, a different bech32 HRP and a different WIF byte).
+   *
+   * CONFIRMATIONS ARE 12, NOT BITCOIN'S 6. Blocks are ~2.5 minutes rather than ~10, so six here
+   * would be fifteen minutes of work rather than an hour's, on a chain with a small fraction of
+   * Bitcoin's hashrate. Twelve is ~30 minutes and is the depth the larger exchanges publish for
+   * Litecoin. Copying Bitcoin's 6 because the family matches is exactly the "reuse the number with
+   * the code" mistake this file exists to prevent — a depth is a property of a chain's security
+   * budget and block time, never of the software that follows it.
+   */
+  LTC: Object.freeze({
+    asset: 'LTC',
+    family: 'bitcoin',
+    name: 'Litecoin',
+    decimals: 8,
+    confirmations: 12,
+    reorgAlarmDepth: 6,
+    explorerTxUrl: explorers('https://litecoinspace.org/tx/', 'https://litecoinspace.org/testnet/tx/'),
   }),
   SOL: Object.freeze({
     asset: 'SOL',
@@ -268,6 +309,32 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
   }),
 })
 
+/**
+ * The assets the estate HOLDS BALANCES IN, which is a smaller set than the assets it can name.
+ *
+ * **`LTC` is deliberately absent, and adding it is a coordinated release rather than a one-line
+ * edit.** The distinction this list draws is not cosmetic: `CHAINS` says "the estate knows this
+ * chain's rules", and this list says "the ledger supervises balances denominated in it". Litecoin
+ * is at the first stage and not the second.
+ *
+ * WHAT ADDING IT HERE WOULD DO TODAY, checked rather than assumed, because two of the three are in
+ * repositories that cannot be fixed in the same commit:
+ *
+ *   1. `ledger` seeds a `chain_assets` table from a hand-written literal in its own migrations, and
+ *      its reconciliation test asserts the table equals THIS list. A new member therefore requires a
+ *      new ledger migration, and the migration text is checksummed — so it cannot be amended in
+ *      place and cannot be back-filled by editing this file.
+ *   2. `pricing` derives `MARKET_ASSETS` as everything here that is not administered, so a new
+ *      member immediately becomes an asset the oracle claims to quote. With no source configured
+ *      for it the round fails closed — correct — but a 404 from one provider rejects that
+ *      provider's whole promise, which degrades the round for BTC, ETH, SOL and XRP too. A price
+ *      source has to exist BEFORE the asset is listed, not after.
+ *   3. `site` publishes the count of on-chain assets and re-derives it from this array in a test
+ *      that explicitly refuses to skip.
+ *
+ * So the order is: this list last. Wire the follower, the addresses and the sweep first; add the
+ * price source; then add the member here in a release that carries the ledger migration with it.
+ */
 export const ON_CHAIN_ASSETS: readonly AssetCode[] = Object.freeze([
   'EMBER',
   'BTC',

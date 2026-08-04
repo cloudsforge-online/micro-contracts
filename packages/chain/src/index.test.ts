@@ -34,7 +34,64 @@ test('the published confirmation depths are exactly what the estate promises', (
   assert.equal(CHAINS.ETH.confirmations, 12)
   assert.equal(CHAINS.SOL.confirmations, 32)
   assert.equal(CHAINS.XRP.confirmations, 1)
-  assert.equal(CHAINS.BTC.confirmations, 3)
+  // Raised from 3 when native BTC deposits were built. See the note on the BTC spec: three was a
+  // placeholder nobody had revisited, and it was changed while no deposit had ever been credited
+  // at it. This assertion going red is the intended experience of changing it again.
+  assert.equal(CHAINS.BTC.confirmations, 6)
+  // Litecoin is Bitcoin's family and NOT Bitcoin's depth — ~2.5-minute blocks, so twelve is the
+  // ~30 minutes that six would have been on Bitcoin. If this ever equals BTC's, somebody has
+  // copied the number along with the code.
+  assert.equal(CHAINS.LTC.confirmations, 12)
+  assert.notEqual(CHAINS.LTC.confirmations, CHAINS.BTC.confirmations)
+})
+
+test('every spec alarms on a reorg strictly shallower than the one it credits at', () => {
+  // The guarantee the whole estate rests on: a reorg deep enough to retract a CREDITED movement is
+  // always deep enough to have halted the chain first. A new asset whose alarm depth is set at or
+  // above its credit depth removes that quietly, so it is asserted over the registry rather than
+  // per asset — a spec added without reading this still has to satisfy it.
+  for (const spec of Object.values(CHAINS)) {
+    if (spec.confirmations === 0) continue // SHARD is retired and never touches a chain.
+
+    // XRP IS THE ONE EXEMPTION AND IT IS NOT AN OVERSIGHT — it was found by this test, which is the
+    // reason the test is written over the registry rather than as five assertions.
+    //
+    // The ordering exists because on a probabilistic-finality chain "credited" and "reorganisable"
+    // overlap, and the alarm has to fire in the gap. XRPL has no such gap: a validated ledger is
+    // final, so `confirmations: 1` is not a shallow depth, it is the whole of finality. That leaves
+    // nowhere below it to put an alarm. `reorgAlarmDepth: 1` therefore reads as "any reorg at all
+    // is an alarm", which for a chain that is not supposed to have them is the strictest available
+    // setting, not the weakest — and the alternative, 0, would mean never alarming.
+    //
+    // The general claim that this ordering holds estate-wide is therefore FALSE as written, and the
+    // exemption belongs here where a new spec's author will read it, rather than in prose.
+    if (spec.family === 'xrp') {
+      assert.equal(spec.confirmations, 1, 'the XRP exemption is only sound at deterministic finality')
+      assert.equal(spec.reorgAlarmDepth, 1)
+      continue
+    }
+
+    assert.ok(
+      spec.reorgAlarmDepth < spec.confirmations,
+      `${spec.asset} alarms at ${spec.reorgAlarmDepth} but credits at ${spec.confirmations}`,
+    )
+  }
+})
+
+test('LTC is Bitcoin-family, so the Bitcoin worker and the PSBT pin apply to it unchanged', () => {
+  assert.equal(CHAINS.LTC.family, 'bitcoin')
+  assert.equal(CHAINS.LTC.decimals, 8)
+  // No chain id, like Bitcoin: the network binding is carried by the WIF and by the node's own
+  // `getblockchaininfo.chain`, not by a number in the transaction.
+  assert.equal(CHAINS.LTC.chainId, undefined)
+})
+
+test('LTC can be named but is not yet an asset the ledger holds balances in', () => {
+  // The deliberate half-step. `chainSpec` answers, so the indexer and custody can work with it,
+  // while `ON_CHAIN_ASSETS` does not list it, so the ledger does not try to reconcile a balance
+  // nothing can yet create. Removing either half of this without the other is the bug.
+  assert.equal(chainSpec('LTC').name, 'Litecoin')
+  assert.ok(!ON_CHAIN_ASSETS.includes('LTC'))
 })
 
 test('EMBER is 18 decimals, because Hearth is an account-model EVM chain', () => {
