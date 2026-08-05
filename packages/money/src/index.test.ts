@@ -17,6 +17,7 @@ import {
   assetDecimals,
   balanceEntry,
   chainSubject,
+  chainTokenAssetCode,
   communitySubject,
   compareMoney,
   computeDrift,
@@ -28,15 +29,18 @@ import {
   freezesWithdrawals,
   increasesBalance,
   isAccountSubject,
+  isChainAsset,
   isEntitlementActive,
   isEntryKind,
   isPayoutConsistent,
+  isTokenAsset,
   money,
   moneyForShards,
   movePostings,
   normalBalance,
   organisationSubject,
   parseAccountKey,
+  parseChainTokenAsset,
   parseAccountSubject,
   parseMoney,
   payoutNet,
@@ -714,6 +718,86 @@ test('decimals come from contracts-chain, USD is cents, and a token must declare
   assert.equal(assetDecimals('USD'), 2)
   assert.throws(() => assetDecimals('TOKEN:cf:mint:token:1'), RangeError)
   assert.equal(assetDecimals('TOKEN:cf:mint:token:1', 6), 6)
+})
+
+// ---------------------------------------------------------------------------
+// chain token asset codes — the deployment is the identity, never the brand
+// ---------------------------------------------------------------------------
+
+// The real Tether and Circle deployments on Ethereum mainnet. Written out because the whole point
+// of the rule is that these two are DIFFERENT assets that a brand code would have merged, and a
+// test using `0xaa…` twice would not demonstrate that.
+const USDT_ETH = '0xdac17f958d2ee523a2206206994597c13d831ec7'
+const USDC_ETH = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+
+test('a chain token asset is named by its deployment, and a brand name is refused', () => {
+  const usdt = chainTokenAssetCode({ chain: 'eth', network: 'mainnet', contract: USDT_ETH })
+  assert.equal(usdt, `TOKEN:eth:mainnet:${USDT_ETH}`)
+
+  // THE RULE. `settlement/src/sweeps.ts:499` — "NOTHING HERE MAY EVER WRITE `USDT`." A brand name
+  // has no chain, no network and no contract, so it cannot pass the shape at all.
+  for (const brand of ['USDT', 'USDC', 'usdt', 'Tether']) {
+    assert.throws(() => chainTokenAssetCode({ chain: brand, network: 'mainnet', contract: '' }), RangeError)
+  }
+  assert.throws(() => chainTokenAssetCode({ chain: 'eth', network: 'mainnet', contract: 'USDT' }), RangeError)
+})
+
+test('one brand at two deployments is two ledger assets, permanently', () => {
+  // Same brand, same decimals, same chain — different contracts. If these ever compared equal, the
+  // ledger would hold Tether and Circle balances in one account and reconcile neither.
+  const usdt = chainTokenAssetCode({ chain: 'eth', network: 'mainnet', contract: USDT_ETH })
+  const usdc = chainTokenAssetCode({ chain: 'eth', network: 'mainnet', contract: USDC_ETH })
+  assert.notEqual(usdt, usdc)
+
+  // Same brand, same contract, different NETWORK. A testnet deposit is not mainnet money.
+  const testnet = chainTokenAssetCode({ chain: 'eth', network: 'testnet', contract: USDT_ETH })
+  assert.notEqual(usdt, testnet)
+})
+
+test('a checksummed address and a lower-cased one are one asset, not two', () => {
+  const checksummed = '0xdAC17F958D2ee523a2206206994597C13D831ec7'
+  assert.equal(
+    chainTokenAssetCode({ chain: 'eth', network: 'mainnet', contract: checksummed }),
+    chainTokenAssetCode({ chain: 'eth', network: 'mainnet', contract: USDT_ETH }),
+  )
+})
+
+test('decimals are not in the code, so the six-decimal case must still be declared', () => {
+  const usdt = chainTokenAssetCode({ chain: 'eth', network: 'mainnet', contract: USDT_ETH })
+  // The defect this guards: guessing 18 for a six-decimal stablecoin is a balance wrong by 10^12.
+  assert.throws(() => assetDecimals(usdt), RangeError)
+  assert.equal(assetDecimals(usdt, 6), 6)
+  assert.equal(parseMoney('1.5', usdt, 6).amount, 1_500_000n)
+})
+
+test('parseChainTokenAsset answers only for a deployment, and null for anything else', () => {
+  const usdt = chainTokenAssetCode({ chain: 'eth', network: 'mainnet', contract: USDT_ETH })
+  assert.deepEqual(parseChainTokenAsset(usdt), {
+    chain: 'eth',
+    network: 'mainnet',
+    contract: USDT_ETH,
+  })
+
+  // A tessera fired object is a `TOKEN:` asset too, and is not a chain deployment. Null, not throw:
+  // asking "is this a chain token" is a legitimate question with a legitimate negative answer.
+  assert.equal(parseChainTokenAsset('TOKEN:cf:tessera:object:abc'), null)
+  assert.equal(parseChainTokenAsset('USDT' as LedgerAssetCode), null)
+  assert.equal(parseChainTokenAsset('EMBER'), null)
+  // A network the estate does not run. The shape matches; the network does not.
+  assert.equal(parseChainTokenAsset(`TOKEN:eth:devnet:${USDT_ETH}` as LedgerAssetCode), null)
+})
+
+test('the code round-trips through the parser without changing', () => {
+  const usdt = chainTokenAssetCode({ chain: 'eth', network: 'mainnet', contract: USDT_ETH })
+  const parsed = parseChainTokenAsset(usdt)
+  assert.ok(parsed)
+  assert.equal(chainTokenAssetCode(parsed), usdt)
+})
+
+test('a chain token asset code is still a token asset to every existing consumer', () => {
+  const usdt = chainTokenAssetCode({ chain: 'eth', network: 'mainnet', contract: USDT_ETH })
+  assert.equal(isTokenAsset(usdt), true)
+  assert.equal(isChainAsset(usdt), false)
 })
 
 test('formatting and parsing round-trip without ever becoming a float', () => {

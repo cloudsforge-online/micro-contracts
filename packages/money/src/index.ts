@@ -30,6 +30,7 @@
 
 import {
   type AssetCode,
+  type Network,
   CHAINS,
   RATE_SCALE,
   SHARDS_PER_USD,
@@ -74,6 +75,99 @@ export function isChainAsset(code: LedgerAssetCode): code is AssetCode {
 
 export function isTokenAsset(code: LedgerAssetCode): code is TokenAssetCode {
   return code.startsWith('TOKEN:')
+}
+
+/* ─────────────────────────────────────────────── Chain tokens, and the ban on the brand name */
+
+/**
+ * An ERC-20-style token asset, named by the DEPLOYMENT it lives at.
+ *
+ * A subtype of `TokenAssetCode` rather than a narrowing of it, because `TOKEN:` carries two
+ * unrelated urn families and always will: this one, and `micro-tessera`'s fired objects
+ * (`tessera/src/itemasset.ts:86` builds `TOKEN:cf:tessera:object:<hex>`). Narrowing the parent
+ * would break tessera's build, and every consumer resolves this package by `link:` at HEAD.
+ *
+ * ══════════════════════════════════════════════════════════════════════════════════════════════
+ * ## `USDT` IS NOT AN ASSET CODE. NEITHER IS `USDC`. NEITHER IS ANY OTHER BRAND NAME.
+ *
+ * This is `settlement/src/sweeps.ts:499`'s rule, promoted here for the reason the Spark rule was
+ * promoted into `contracts-chain`: a rule that lives in one service is a rule the next service
+ * does not know about. Settlement states it in a comment, `foresight/src/stakeassets.ts:141`
+ * re-derives it as a regex, and `foresight/src/migrations.ts:771` re-derives it a third time as a
+ * CHECK constraint. Three spellings of one rule, and none of them in the contract they all import.
+ *
+ * The reason is arithmetic, not taste. **Tether is six decimals on Ethereum, six on Tron and
+ * eighteen on BSC.** A single `USDT` code forces one exponent onto all three, and a wrong exponent
+ * on a stablecoin is a balance wrong by a factor of 10^12 — the same class of silent scale defect
+ * as `BigInt('') === 0n`, which this estate has been bitten by before. USDC is the same shape of
+ * problem with different numbers, which is why it is named above rather than left to be discovered.
+ *
+ * The second reason is that one brand code silently asserts a deposit on one chain may be paid out
+ * on another. It may not, without a bridge this platform is not and must never become.
+ *
+ * A brand name is a display grouping for a frontend. It is never a code.
+ * ══════════════════════════════════════════════════════════════════════════════════════════════
+ *
+ * **Decimals are deliberately not in the code.** They are a property of the deployment, read from
+ * the registry that admitted it, and `assetDecimals` below refuses to guess one. Putting them in
+ * the string would make every consumer that parses it a second authority on the number.
+ */
+export type ChainTokenAssetCode = `TOKEN:${string}:${Network}:0x${string}`
+
+/** The three things that name a token deployment. Decimals are not among them — see above. */
+export interface ChainTokenAsset {
+  /**
+   * The chain slug. Lower-case, and **the estate does not agree on it**: `micro-custody` stores
+   * `ethereum` where `micro-settlement` uses `eth` (`settlement/src/sweeps.ts:520` translates
+   * between them). This package deliberately does not invent a third vocabulary to arbitrate
+   * that — it validates the shape and leaves the slug to the services that already own one.
+   */
+  readonly chain: string
+  readonly network: Network
+  /** Lower-case hex, `0x` and forty digits. Checksum casing is normalised away, never trusted. */
+  readonly contract: string
+}
+
+/**
+ * The one shape a chain token asset code may take: `TOKEN:<chain>:<network>:<0x contract>`.
+ *
+ * Kept identical to `foresight/src/stakeassets.ts:141` and `foresight/src/migrations.ts:771` on
+ * purpose, so that promoting this does not quietly admit a code those two would reject.
+ */
+const CHAIN_TOKEN_CODE = /^TOKEN:([a-z0-9]+):([a-z0-9]+):(0x[0-9a-f]{40})$/
+
+const NETWORKS: readonly string[] = Object.freeze(['mainnet', 'testnet'])
+
+/**
+ * Build the ledger asset code for a token deployment, or throw.
+ *
+ * Throws rather than normalising a bad input, because this is the one place two spellings of one
+ * deployment could be born — and two spellings of one deployment are two ledger assets holding
+ * halves of one pile of money, with nothing able to notice.
+ *
+ * The contract is lower-cased on the way in. That is not distrust of the caller's schema: an
+ * address arrives EIP-55 checksummed from some sources and lower-case from others, and a
+ * normalisation that happens in only some places is the one that gets skipped.
+ */
+export function chainTokenAssetCode(asset: ChainTokenAsset): ChainTokenAssetCode {
+  const code = `TOKEN:${asset.chain}:${asset.network}:${asset.contract.toLowerCase()}`
+  if (!CHAIN_TOKEN_CODE.test(code)) {
+    throw new RangeError(
+      `a chain token asset is TOKEN:<chain>:<network>:<lowercase 0x contract>, not ${code} — ` +
+        'a brand name such as USDT or USDC is never a code, because one brand is deployed at ' +
+        'several contracts with different decimals',
+    )
+  }
+  return code as ChainTokenAssetCode
+}
+
+/** The deployment a code names, or `null` when it names something else — a tessera object, say. */
+export function parseChainTokenAsset(code: LedgerAssetCode): ChainTokenAsset | null {
+  const matched = CHAIN_TOKEN_CODE.exec(code)
+  const [, chain, network, contract] = matched ?? []
+  if (chain === undefined || network === undefined || contract === undefined) return null
+  if (!NETWORKS.includes(network)) return null
+  return { chain, network: network as Network, contract }
 }
 
 /**
