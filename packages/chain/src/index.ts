@@ -312,33 +312,52 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
 /**
  * The assets the estate HOLDS BALANCES IN, which is a smaller set than the assets it can name.
  *
- * **`LTC` is deliberately absent, and adding it is a coordinated release rather than a one-line
- * edit.** The distinction this list draws is not cosmetic: `CHAINS` says "the estate knows this
- * chain's rules", and this list says "the ledger supervises balances denominated in it". Litecoin
- * is at the first stage and not the second.
+ * The distinction this list draws is not cosmetic: `CHAINS` says "the estate knows this chain's
+ * rules", and this list says "the ledger supervises balances denominated in it". An asset reaches
+ * the first long before it reaches the second.
  *
- * WHAT ADDING IT HERE WOULD DO TODAY, checked rather than assumed, because two of the three are in
- * repositories that cannot be fixed in the same commit:
+ * ── LTC WAS THE STANDING EXAMPLE OF THE GAP, AND IT CLOSED ON 2026-08-05 ────────────────────────
  *
- *   1. `ledger` seeds a `chain_assets` table from a hand-written literal in its own migrations, and
- *      its reconciliation test asserts the table equals THIS list. A new member therefore requires a
- *      new ledger migration, and the migration text is checksummed — so it cannot be amended in
- *      place and cannot be back-filled by editing this file.
- *   2. `pricing` derives `MARKET_ASSETS` as everything here that is not administered, so a new
- *      member immediately becomes an asset the oracle claims to quote. With no source configured
- *      for it the round fails closed — correct — but a 404 from one provider rejects that
- *      provider's whole promise, which degrades the round for BTC, ETH, SOL and XRP too. A price
- *      source has to exist BEFORE the asset is listed, not after.
- *   3. `site` publishes the count of on-chain assets and re-derives it from this array in a test
- *      that explicitly refuses to skip.
+ * This comment used to say Litecoin was "deliberately absent, and adding it is a coordinated
+ * release rather than a one-line edit", and list the three things that would break. It was right,
+ * so the list is kept below with what was actually done about each — because the next asset will
+ * face the same three, and "it was done once" is more useful than "it must be done".
  *
- * So the order is: this list last. Wire the follower, the addresses and the sweep first; add the
- * price source; then add the member here in a release that carries the ledger migration with it.
+ *   1. **`ledger` seeds a `chain_assets` table from a hand-written literal in its own migrations**,
+ *      and its reconciliation test asserts the table equals THIS list. The migration text is
+ *      checksummed, so it can be neither amended in place nor back-filled from here.
+ *      → `ledger` migration 14, `litecoin_chain_asset`, inserts the row. A NEW migration, because
+ *        editing 11 would change an applied checksum and every deployment would refuse to start.
+ *   2. **`pricing` derives `MARKET_ASSETS` as everything here that is not administered**, so a new
+ *      member immediately becomes an asset the oracle claims to quote. This was the dangerous one
+ *      and it was worse than this comment claimed: it is not that the round "degrades" for the
+ *      others, it is that Coinbase built its product URL from the asset code, `httpFetchJson`
+ *      throws on a non-200, and `Promise.all` turned one unlisted symbol into a source that
+ *      answered nothing for BTC, ETH, SOL and XRP as well.
+ *      → `pricing` now carries a symbol map per venue and builds its URLs from it, so a venue is
+ *        never asked for a symbol it does not publish; `pricing/src/sources.test.ts` fails the
+ *        moment this list widens past those maps. LTC was wired and proved at all four venues
+ *        BEFORE this line changed. **That order is the rule, not the anecdote.**
+ *   3. **`site` publishes the count of on-chain assets** and re-derives it from this array in a
+ *      test that explicitly refuses to skip.
+ *      → It re-derived itself to 6. The PROSE beside it did not, because it was typed; it is now
+ *        derived from this array too (`site/src/content/pages.ts`).
+ *
+ * A fourth was found while doing it, and is recorded because nothing was watching it: **`sdk`
+ * keeps a deliberate copy of these values** for a public package that must not import a private
+ * one. Its `tools/drift.ts` compared only the assets the SDK already knew, so an asset present
+ * here and absent there was invisible to it — which is how the SDK went on telling integrators
+ * that a BTC deposit is final at 3 confirmations for as long as it did. It now compares the SETS.
+ *
+ * So the order for the next asset is unchanged and now has a worked example: wire the follower,
+ * the addresses and the sweep; add the price source and prove it against the live venues; then add
+ * the member here, in a release that carries the ledger migration with it.
  */
 export const ON_CHAIN_ASSETS: readonly AssetCode[] = Object.freeze([
   'EMBER',
   'BTC',
   'ETH',
+  'LTC',
   'SOL',
   'XRP',
 ])

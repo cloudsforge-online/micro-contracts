@@ -86,12 +86,30 @@ test('LTC is Bitcoin-family, so the Bitcoin worker and the PSBT pin apply to it 
   assert.equal(CHAINS.LTC.chainId, undefined)
 })
 
-test('LTC can be named but is not yet an asset the ledger holds balances in', () => {
-  // The deliberate half-step. `chainSpec` answers, so the indexer and custody can work with it,
-  // while `ON_CHAIN_ASSETS` does not list it, so the ledger does not try to reconcile a balance
-  // nothing can yet create. Removing either half of this without the other is the bug.
+test('LTC IS NOW AN ASSET THE LEDGER HOLDS BALANCES IN — the half-step closed', () => {
+  // This test used to assert the opposite: `assert.ok(!ON_CHAIN_ASSETS.includes('LTC'))`, pinning
+  // the deliberate half-step in which `chainSpec` answered for Litecoin so the indexer and custody
+  // could work with it, while the ledger was not yet asked to reconcile a balance nothing could
+  // create. It is INVERTED rather than deleted, because the property worth holding was never
+  // "LTC is absent" — it was "these two halves move together". They have now both moved.
   assert.equal(chainSpec('LTC').name, 'Litecoin')
-  assert.ok(!ON_CHAIN_ASSETS.includes('LTC'))
+  assert.ok(ON_CHAIN_ASSETS.includes('LTC'))
+})
+
+test('every member of ON_CHAIN_ASSETS is a chain this file actually knows the rules for', () => {
+  // The generalisation of the test above, and the reason it can be inverted safely: the pairing of
+  // "named in CHAINS" with "listed here" is now asserted for the whole set rather than for one
+  // asset. A member added here without a spec, or with a spec that is a placeholder, fails.
+  for (const asset of ON_CHAIN_ASSETS) {
+    const spec = chainSpec(asset)
+    assert.equal(spec.asset, asset)
+    assert.ok(spec.name.length > 0, `${asset} has no chain name`)
+    assert.ok(spec.confirmations >= 1, `${asset} would be credited before any block confirms it`)
+    assert.ok(spec.reorgAlarmDepth >= 1, `${asset} would never alarm on a reorg`)
+  }
+  // And the retired asset stays out of it: SHARD is in CHAINS so `chainSpec` is total, which is
+  // exactly why membership here has to be its own list rather than `Object.keys(CHAINS)`.
+  assert.ok(!ON_CHAIN_ASSETS.includes('SHARD'))
 })
 
 test('EMBER is 18 decimals, because Hearth is an account-model EVM chain', () => {
