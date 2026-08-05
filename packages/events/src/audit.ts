@@ -96,6 +96,24 @@ export type TopicAudit =
 export const TOPIC_AUDIT = Object.freeze({
   /* ---------------------------------------------------------------- identity: account security */
   'identity.user.registered': { audited: true, subjectKind: 'user', outcome: 'allowed' },
+  'identity.email.verification_requested': {
+    audited: true,
+    subjectKind: 'user',
+    outcome: 'allowed',
+    /*
+     * Audited, unlike `identity.session.created`, and the two are worth telling apart.
+     *
+     * Volume is what excludes sign-ins: one row per login per user, for ever. A verification is
+     * asked for once per account plus each resend, so the row count is bounded by sign-ups rather
+     * than by usage — the same shape as `identity.user.registered` beside it, which is audited.
+     *
+     * And it is the one event that says an address was CLAIMED. "Who asked for a link to this
+     * address, and when" is the question any dispute about account ownership starts from, and the
+     * event carries a single-use credential: an audited request is what makes a resend storm or a
+     * claim on somebody else's address visible after the fact rather than only in a log that
+     * rotates.
+     */
+  },
   'identity.user.deleted': { audited: true, subjectKind: 'user', outcome: 'allowed' },
   'identity.session.revoked': { audited: true, subjectKind: 'session', outcome: 'allowed' },
   'identity.mfa.added': { audited: true, subjectKind: 'user', outcome: 'allowed' },

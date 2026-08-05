@@ -237,6 +237,44 @@ export const TOPICS = Object.freeze({
     keyedBy: 'user_id',
     description: 'An account exists, with its personal organisation already created.',
   }),
+  /**
+   * THE TOPIC WITHOUT WHICH NOBODY CAN CREATE A WORKING ACCOUNT.
+   *
+   * Registered from the verbatim spec identity left in `identity/src/topics.ts:108-119`
+   * (`AWAITING_REGISTRATION`), which it could not land itself — the same route the
+   * `identity.session.revoked` entry above took.
+   *
+   * ── What its absence cost, measured on the live estate ────────────────────────────────────
+   *
+   * `micro-identity` 1.1.0 stopped minting a session at registration and emits this instead;
+   * `notify` renders `account.verify_email` from it (`notify/src/catalogue.ts:659`). Neither
+   * could work, because `validateEnvelope` refuses a topic this registry does not carry and
+   * `notify` therefore answered `POST /ingest` with 400 for every one:
+   *
+   *     topic: "identity.email.verification_requested" is not in this registry;
+   *     contracts-events may be behind
+   *
+   * So registration returned 202 "check your email", the mail was never rendered, and sign-in
+   * refused the account with `email_unverified` — an account nobody could finish making. The
+   * fix for #30 was merged in two repositories and the third, which had to agree, was never
+   * told. That is the whole failure: a contract is the one thing that cannot be changed in one
+   * repository at a time.
+   *
+   * ── Why the link is in the payload ────────────────────────────────────────────────────────
+   *
+   * identity does not speak SMTP by design (`identity/src/passwordReset.ts:173-179` rejects a
+   * second mail transport by name), so the absolute link travels here and lands in notify's
+   * database. That is the same trade every notification's template parameters already make, and
+   * it is why the token is single-use and expires in 24 hours.
+   */
+  'identity.email.verification_requested': Object.freeze({
+    producer: 'identity',
+    payloadType: 'EmailVerificationRequested',
+    version: '1.0',
+    keyedBy: 'user_id',
+    description:
+      'An account asked for its email address to be verified, carrying the single-use link to send.',
+  }),
   'identity.user.deleted': Object.freeze({
     producer: 'identity',
     payloadType: 'UserDeleted',
