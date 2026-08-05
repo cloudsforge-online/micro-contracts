@@ -198,12 +198,27 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
     reorgAlarmDepth: 5,
     chainId: Object.freeze({ mainnet: 7411, testnet: 7412 }),
     // The two environments run side by side on one host under one apex: mainnet at
-    // `cloudsforge.online`, testnet at `testnet.cloudsforge.online`. Both explorers are real and
-    // both are served — `micro-deploy/cloudflared/config.mainnet.public.yml:76` and
-    // `config.testnet.public.yml:76`. Until now this said the mainnet host twice.
+    // `cloudsforge.online`, testnet under the SINGLE-LABEL suffix `-testnet.cloudsforge.online`.
+    // Both explorers are real and both are served — `micro-deploy/cloudflared/
+    // config.mainnet.public.yml:80` and `config.testnet.public.yml:78`.
+    //
+    // THIS LINE HAS BEEN WRONG TWICE, IN TWO DIFFERENT WAYS, AND THE SECOND IS WHY THE HOSTNAME
+    // SHAPE IS SPELLED OUT HERE. First it said the mainnet host twice, so a testnet hash opened
+    // the mainnet explorer and was told it did not exist. The repair pointed at
+    // `explorer.testnet.cloudsforge.online` — testnet as an apex PREFIX, two labels deep. That
+    // host does not resolve and cannot: Cloudflare Universal SSL's wildcard covers exactly ONE
+    // label, so `*.cloudsforge.online` matches `explorer-testnet` and not `explorer.testnet`.
+    // The link stopped being wrong-network and started being unreachable — measured, not
+    // inferred: it answers nothing at all, where `explorer-testnet.cloudsforge.online` answers
+    // 200. `micro-deploy/compose/env/traefik.testnet.env:104` is the authority for the shape,
+    // `CF_WEB_SUFFIX=-testnet.cloudsforge.online`, and every testnet surface is formed from it.
+    //
+    // `explorers()` guards only that the two differ, which BOTH broken versions satisfied. It
+    // cannot know whether a hostname resolves, so that half stays a matter of reading this
+    // comment before editing the line.
     explorerTxUrl: explorers(
       'https://explorer.cloudsforge.online/#/tx/',
-      'https://explorer.testnet.cloudsforge.online/#/tx/',
+      'https://explorer-testnet.cloudsforge.online/#/tx/',
     ),
   }),
   ETH: Object.freeze({

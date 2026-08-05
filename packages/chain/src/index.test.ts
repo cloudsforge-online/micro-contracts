@@ -247,12 +247,17 @@ test('explorer links differ per network, and Shards have none', () => {
 
 test("an EMBER testnet link goes to the TESTNET explorer, not the one that says 'not found'", () => {
   // The defect this replaces: both networks named `explorer.cloudsforge.online`, so every testnet
-  // hash was linked into the mainnet explorer, which cannot know it. The two environments stand
-  // side by side under one apex — `micro-deploy/cloudflared/config.testnet.public.yml:76` serves
-  // `explorer.testnet.cloudsforge.online` — so the testnet link has somewhere real to point.
+  // hash was linked into the mainnet explorer, which cannot know it.
+  //
+  // AND THE DEFECT THE REPAIR INTRODUCED, WHICH IS WHY THIS ASSERTS THE WHOLE STRING AND NOT
+  // `/testnet/`. The first fix pointed at `explorer.testnet.cloudsforge.online` — two labels —
+  // which no longer resolves and never could under Cloudflare's one-label wildcard. A regex like
+  // `/testnet/` passes on both the working host and the dead one, so it would have watched this
+  // line break without noticing. `micro-deploy/cloudflared/config.testnet.public.yml:78` serves
+  // `explorer-testnet.cloudsforge.online`, and that exact string is the assertion.
   assert.equal(
     explorerTxUrl('EMBER', 'testnet', '0xdead'),
-    'https://explorer.testnet.cloudsforge.online/#/tx/0xdead',
+    'https://explorer-testnet.cloudsforge.online/#/tx/0xdead',
   )
   assert.equal(
     explorerTxUrl('EMBER', 'mainnet', '0xdead'),
