@@ -380,6 +380,67 @@ export const TOPICS = Object.freeze({
     keyedBy: 'wallet_id',
     description: 'A user asked for money to leave. Policy and activity both need the moment.',
   }),
+
+  /* ── wallet — the five names it emitted against a registry that knew three ─────────────────────
+   *
+   * `micro-wallet` produces eight topics. Three were registered. `validateEnvelope` refuses an
+   * unregistered name, so the relay could not build an envelope for the other five and — after
+   * `micro-wallet`'s quarantine landed — set them aside instead: **244 rows on the mainnet estate,
+   * 243 `deposit_address.assigned` and one `link.verified`, every one with the same reason,
+   * "is not in this registry; contracts-events may be behind".** The registry was behind.
+   *
+   * None of the five is a money INSTRUCTION — the one topic that moves money,
+   * `wallet.withdrawal.requested`, was registered and is why it alone had a live subscriber. What
+   * was lost is the record: an operator investigating "which address did we give this person, and
+   * when" had nothing to read, and `notify` could not tell anybody their withdrawal had been
+   * refunded. Both are facts about somebody's money even where no coin moves on them.
+   *
+   * `keyedBy` is stated from what wallet ACTUALLY sends rather than from what would be tidy,
+   * because the key is the ordering partition and changing it silently reorders every consumer's
+   * view. `wallet.deposit_address.assigned` is keyed `chain:network:address_key`
+   * (`wallet/src/deposits.ts:353`) and that is right for it: assignments for one address must stay
+   * ordered against each other through a rotation, and they are the only ones that must.
+   * ────────────────────────────────────────────────────────────────────────────────────────────── */
+  'wallet.deposit_address.assigned': Object.freeze({
+    producer: 'wallet',
+    payloadType: 'DepositAddressAssigned',
+    version: '1.0',
+    keyedBy: 'chain:network:address',
+    description:
+      'A custodial deposit address was assigned to a user for one asset, or rotated to a new one.',
+  }),
+  'wallet.link.verified': Object.freeze({
+    producer: 'wallet',
+    payloadType: 'WalletLinkVerified',
+    version: '1.0',
+    keyedBy: 'wallet_id',
+    description:
+      'A user proved they hold the key to an external wallet, which is what authorises it as a ' +
+      'withdrawal destination.',
+  }),
+  'wallet.link.revoked': Object.freeze({
+    producer: 'wallet',
+    payloadType: 'WalletLinkRevoked',
+    version: '1.0',
+    keyedBy: 'wallet_id',
+    description: 'An external wallet stopped being an authorised withdrawal destination.',
+  }),
+  'wallet.withdrawal.refunded': Object.freeze({
+    producer: 'wallet',
+    payloadType: 'WithdrawalRefunded',
+    version: '1.0',
+    keyedBy: 'withdrawal_id',
+    description:
+      'A withdrawal failed and the reservation went back to the balance. The user is owed this one.',
+  }),
+  'wallet.withdrawal.stuck': Object.freeze({
+    producer: 'wallet',
+    payloadType: 'WithdrawalStuck',
+    version: '1.0',
+    keyedBy: 'withdrawal_id',
+    description:
+      'A withdrawal passed its deadline with no word from settlement. Funds are still reserved.',
+  }),
   'settlement.withdrawal.completed': Object.freeze({
     producer: 'settlement',
     payloadType: 'WithdrawalCompleted',

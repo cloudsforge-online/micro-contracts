@@ -144,6 +144,21 @@ export const TOPIC_AUDIT = Object.freeze({
   'wallet.wallet.created': { audited: true, subjectKind: 'wallet', outcome: 'allowed' },
   'wallet.deposit.confirmed': { audited: true, subjectKind: 'wallet', outcome: 'allowed' },
   'wallet.withdrawal.requested': { audited: true, subjectKind: 'wallet', outcome: 'allowed' },
+  // An address the platform will credit money arriving at. "Which address did we give this person,
+  // and when" is an incident question, and it had no answer.
+  'wallet.deposit_address.assigned': {
+    audited: true,
+    subjectKind: 'deposit_address',
+    outcome: 'allowed',
+  },
+  // The moment an external address became spendable-to. It is the control a withdrawal to a
+  // stranger's address would have to defeat, so it must be provable after the fact.
+  'wallet.link.verified': { audited: true, subjectKind: 'wallet', outcome: 'allowed' },
+  'wallet.link.revoked': { audited: true, subjectKind: 'wallet', outcome: 'allowed' },
+  // `failed`: a refund is money a customer asked to withdraw and did not get, however correctly
+  // the balance was returned.
+  'wallet.withdrawal.refunded': { audited: true, subjectKind: 'withdrawal', outcome: 'failed' },
+  'wallet.withdrawal.stuck': { audited: true, subjectKind: 'withdrawal', outcome: 'failed' },
   'settlement.withdrawal.completed': {
     audited: true,
     subjectKind: 'withdrawal',

@@ -14,7 +14,7 @@ import { AUDITED_TOPICS, TOPIC_AUDIT, auditRowFor } from './audit.ts'
 test('every registered topic has an audit decision, and every decision names a real topic', () => {
   const decided = Object.keys(TOPIC_AUDIT).sort()
   assert.deepEqual(decided, [...TOPIC_NAMES].sort())
-  assert.equal(decided.length, 56, 'the topic registry changed; every addition needs a decision')
+  assert.equal(decided.length, 61, 'the topic registry changed; every addition needs a decision')
 })
 
 /**
@@ -70,8 +70,13 @@ test('the inventory of audited topics is pinned — a widening is deliberate', (
     // other six are simulation and say so at the length of a decision.
     'tessera.object.anchored',
     'wallet.deposit.confirmed',
+    'wallet.deposit_address.assigned',
+    'wallet.link.revoked',
+    'wallet.link.verified',
     'wallet.wallet.created',
+    'wallet.withdrawal.refunded',
     'wallet.withdrawal.requested',
+    'wallet.withdrawal.stuck',
     'worlds.provision.completed',
     'worlds.provision.failed',
     'worlds.reward.granted',
@@ -104,7 +109,14 @@ test('every audited topic names a subject kind in the console vocabulary', () =>
     // snake_case singular, as `admin-api/src/actions.ts` spells `ledger_entry` and
     // `moderation_case`. A plural or a camelCase here becomes a filter nobody can guess.
     assert.match(kind, /^[a-z][a-z_]*[a-z]$/, `${name} has subjectKind "${kind}"`)
-    assert.ok(!kind.endsWith('s'), `${name}: subjectKind is a kind, not a collection`)
+    // A trailing `s` is the plural check, and `-ss` is the exception it needs rather than a hole
+    // in it: `deposit_address` is a singular kind that ends in one, and so would `business` or
+    // `status`. English has no plural ending in `ss`, so this rejects every collection and admits
+    // every singular noun that happens to look like one.
+    assert.ok(
+      !kind.endsWith('s') || kind.endsWith('ss'),
+      `${name}: subjectKind is a kind, not a collection`,
+    )
   }
 })
 
@@ -117,7 +129,7 @@ test('every audited topic names a subject kind in the console vocabulary', () =>
  * reservation goes back to the user's balance (`wallet/src/server.ts:872`) — so it is the row an
  * operator needs to prove, afterwards, why money did or did not return.
  */
-test('the only failed outcomes are the three topics that report a non-event', () => {
+test('the only failed outcomes are the topics that report a non-event', () => {
   const failed = AUDITED_TOPICS.filter((name) => {
     const spec = TOPIC_AUDIT[name]
     return spec.audited && spec.outcome === 'failed'
@@ -125,6 +137,11 @@ test('the only failed outcomes are the three topics that report a non-event', ()
   assert.deepEqual(failed, [
     'settlement.outbound.failed',
     'settlement.withdrawal.stuck',
+    // wallet's two, added with the five topics it emitted against a registry that knew three. Both
+    // are money a customer asked for and did not get: a refund is the reservation coming back, and
+    // `stuck` is it not coming back yet. An operator filtering the log for failures must find them.
+    'wallet.withdrawal.refunded',
+    'wallet.withdrawal.stuck',
     'worlds.provision.failed',
   ])
 })
