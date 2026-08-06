@@ -13,7 +13,7 @@
  * range". Measured, that is not true and has not been:** every consumer resolves it as
  * `link:../contracts/packages/chain` (`wallet`, `settlement`, `custody`, `ledger`, `billing`,
  * `trade`, `mint`, `pricing`, `community`, `foresight`, and `indexer` via `file:`), and CI checks
- * micro-contracts out at `main` with no `ref:` (`org/.github/workflows/service-ci.yml:160`). So a
+ * micro-contracts out at `main` with no `ref:` (`org/.github/workflows/service-ci.yml`). So a
  * change here reaches every consumer on their next run, with no version to stage behind. That
  * makes the coordination real rather than notional, and it is why `SHARD` is deprecated in place
  * below instead of deleted.
@@ -31,7 +31,7 @@ export type Network = 'mainnet' | 'testnet'
  * `SHARD` is still here, and the reason is a measurement rather than an opinion. Shards sit
  * outside the estate's central guarantee (no balance may exist that the chain does not back),
  * which is why they are being removed; but the live ledger holds **114 SHARD accounts summing to
- * 132,000 units** right now. `ledger/src/jobs.ts:175` maps `SHARD` onto the synthetic `platform`
+ * 132,000 units** right now. `ledger/src/jobs.ts` maps `SHARD` onto the synthetic `platform`
  * chain so that reconciliation still watches those accounts, and the reconcile job is typed
  * against this union. Delete the member today and the ledger can no longer *name* the asset it is
  * supervising — 132,000 units of real liability stop being reconciled at all. That is not a step
@@ -43,7 +43,7 @@ export type Network = 'mainnet' | 'testnet'
  *
  * The removal is a coordinated release, not a unilateral one: every consumer resolves this package
  * by `link:../contracts/packages/chain` and CI checks micro-contracts out at `main` unpinned
- * (`org/.github/workflows/service-ci.yml:160`), so the union is shared at HEAD by roughly a dozen
+ * (`org/.github/workflows/service-ci.yml`), so the union is shared at HEAD by roughly a dozen
  * repositories at once — see the header, which used to claim otherwise.
  */
 export type AssetCode = 'EMBER' | 'BTC' | 'ETH' | 'SOL' | 'XRP' | 'LTC' | 'SHARD'
@@ -200,7 +200,7 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
     // The two environments run side by side on one host under one apex: mainnet at
     // `cloudsforge.online`, testnet under the SINGLE-LABEL suffix `-testnet.cloudsforge.online`.
     // Both explorers are real and both are served — `micro-deploy/cloudflared/
-    // config.mainnet.public.yml:80` and `config.testnet.public.yml:78`.
+    // config.mainnet.public.yml` and `config.testnet.public.yml`.
     //
     // THIS LINE HAS BEEN WRONG TWICE, IN TWO DIFFERENT WAYS, AND THE SECOND IS WHY THE HOSTNAME
     // SHAPE IS SPELLED OUT HERE. First it said the mainnet host twice, so a testnet hash opened
@@ -400,7 +400,7 @@ export const RATE_SCALE = 1_000_000n
  * This is `tessera/src/sparks.ts`'s rule, promoted here because it is not tessera's rule — it is
  * the estate's, and a rule that lives in one service is a rule the next service does not know
  * about. The reason is the ledger's balancing invariant, which is enforced **per `asset_code`** by
- * trigger (`ledger/src/migrations.ts:302-313`). A Spark asset code would satisfy that trigger
+ * trigger (`ledger/src/migrations.ts`). A Spark asset code would satisfy that trigger
  * independently of `EMBER`, so the two halves of one pile of money could drift apart with nothing
  * able to notice — and reconciling them again would need a rate between an internal unit and a
  * chain asset, which is exactly the mechanism that mints liability against nothing.
@@ -448,7 +448,7 @@ export const USD_CENTS_DECIMALS = 2
  * This is the conversion that replaces the Shard peg. A price is durable in USD and the coin
  * amount is a settlement-time question, because there is no market price for EMBER — Hearth has no
  * exchange listing, so `micro-pricing` carries an *administered* number for it
- * (`pricing/src/rates.ts:55`, seeded at 0.25 USD in `pricing/src/migrations.ts:185`). An
+ * (`pricing/src/rates.ts`, seeded at 0.25 USD in `pricing/src/migrations.ts`). An
  * administered rate is a figure an operator typed. Storing a price in EMBER against it would mean
  * that editing that figure silently restates every stated dollar price in the catalogue, which is
  * precisely the silent revaluation this estate is trying to stop.
@@ -483,7 +483,7 @@ export function coinAmountForUsdCents(
  * Shards per US dollar. 100 Shards = 1 USD, fixed.
  *
  * @deprecated Shards are being retired. This constant survives for two reasons and no others:
- * `micro-pricing` still publishes a Shard column from it (`pricing/src/rates.ts:202`), and it is
+ * `micro-pricing` still publishes a Shard column from it (`pricing/src/rates.ts`), and it is
  * the peg that the one-time re-denomination of `micro-billing`'s catalogue was computed against
  * (billing migration 11). Because the peg is exactly 100 Shards to 100 cents, that conversion is
  * the identity on the stored integer — see the migration, which argues it. Use

@@ -65,7 +65,7 @@ test('the inventory of audited topics is pinned — a widening is deliberate', (
     // The only one of Tessera's seven that is audited, and the widening IS deliberate: anchoring
     // writes an irreversible authorship claim to a public chain from a PLATFORM key on a user's
     // behalf, because a player cannot sign through custody today (23-tessera.md §9.3;
-    // custody/src/gates.ts:31 excludes `user` from the signing purposes). That is the platform
+    // custody/src/gates.ts excludes `user` from the signing purposes). That is the platform
     // acting with authority over a user's property, which is exactly what this log holds. The
     // other six are simulation and say so at the length of a decision.
     'tessera.object.anchored',
@@ -87,7 +87,7 @@ test('the inventory of audited topics is pinned — a widening is deliberate', (
 /**
  * The claim the whole design rests on: **the topic name IS the audit action.**
  *
- * `admin-api/src/audit.ts:70` documents `action` as `<service>.<aggregate>.<past-tense-verb>`, and
+ * `admin-api/src/audit.ts` documents `action` as `<service>.<aggregate>.<past-tense-verb>`, and
  * that is the topic naming rule here. If it were not — if a topic were two segments, or its first
  * segment were not its producer — then `auditRowFor` would be inventing an action rather than
  * reading one, and a second parallel `*.audit.recorded` stream would have been necessary after all.
@@ -126,7 +126,7 @@ test('every audited topic names a subject kind in the console vocabulary', () =>
  *
  * `settlement.outbound.failed` joined them with the settlement registration wave. It is the one
  * that carries a REMEDY as well as a fact — `refundable` is what wallet reads to decide whether the
- * reservation goes back to the user's balance (`wallet/src/server.ts:872`) — so it is the row an
+ * reservation goes back to the user's balance (`wallet/src/server.ts`) — so it is the row an
  * operator needs to prove, afterwards, why money did or did not return.
  */
 test('the only failed outcomes are the topics that report a non-event', () => {

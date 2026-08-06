@@ -4,8 +4,8 @@
  * ══════════════════════════════════════════════════════════════════════════════════════════════
  * **THE DECISION: `*.audit.recorded` SHOULD NOT EXIST, AND IS NOT REGISTERED HERE.**
  *
- * `admin-api/src/server.ts:132` declares `AUDIT_MIRROR_TOPIC_SUFFIX = '.audit.recorded'` and its
- * intake at `:526` is built, signed, scoped and deduped correctly. That string appears in exactly
+ * `admin-api/src/server.ts` declares `AUDIT_MIRROR_TOPIC_SUFFIX = '.audit.recorded'` and its
+ * intake is built, signed, scoped and deduped correctly. That string appears in exactly
  * one non-test place in the whole estate — that declaration. **The mirror is a consumer with no
  * producer**, so the operator audit log holds `admin-api`'s own rows and nothing from `ledger`,
  * `wallet`, `settlement` or `custody`. `17-definition-of-done.md` §7 claim 9 — an operator answers
@@ -33,7 +33,7 @@
  *   | `source`        | `EventEnvelope.producer` |
  *   | `sourceEventId` | `EventEnvelope.id` — already the dedupe key of the inbox |
  *   | `action`        | **the topic name**. `<service>.<aggregate>.<past-tense-verb>` is the topic
- *                       naming rule here AND the `action` format `admin-api/src/audit.ts:70`
+ *                       naming rule here AND the `action` format `admin-api/src/audit.ts`
  *                       documents. They were already the same string. |
  *   | `subjectId`     | `EventEnvelope.key`, whose meaning `TopicSpec.keyedBy` already states |
  *
@@ -167,7 +167,7 @@ export const TOPIC_AUDIT = Object.freeze({
   // `failed`, deliberately: a stuck withdrawal is money that a customer asked for and did not get.
   'settlement.withdrawal.stuck': { audited: true, subjectKind: 'chain_network', outcome: 'failed' },
   // `failed` for the same reason, and this one carries the refund decision. `refundable` is what
-  // wallet reads to return the reservation to a user's balance (wallet/src/server.ts:872), so it is
+  // wallet reads to return the reservation to a user's balance (wallet/src/server.ts), so it is
   // the row an operator needs to prove afterwards why money did or did not go back.
   'settlement.outbound.failed': { audited: true, subjectKind: 'withdrawal', outcome: 'failed' },
   'settlement.outbound.confirmed': {
@@ -188,8 +188,8 @@ export const TOPIC_AUDIT = Object.freeze({
   'market.listing.sold': { audited: true, subjectKind: 'listing', outcome: 'allowed' },
   // NOT audited, and this one needed arguing rather than labelling, because the obvious reading —
   // "an offer is a bid, not a transfer, so no money moves" — is FALSE. `makeOffer` calls
-  // `holdEscrow` (market/src/bids.ts:429), which calls `ledger.postEntry` with `reservePostings`
-  // (market/src/escrow.ts:145) before the offer row is even returned. Making an offer reserves the
+  // `holdEscrow` (market/src/bids.ts), which calls `ledger.postEntry` with `reservePostings`
+  // (market/src/escrow.ts) before the offer row is even returned. Making an offer reserves the
   // offerer's money. The reason it is still excluded is the settlement.outbound.confirmed reason,
   // not the simulation one: that reservation IS already in the operator log, as the richer of the
   // two rows.
@@ -344,7 +344,7 @@ export const TOPIC_AUDIT = Object.freeze({
   // behalf. It is irreversible, it is externally visible for ever, and the account it names as
   // author is a claim the platform made rather than one the user signed — 23-tessera.md §9.3 is
   // explicit that a player cannot sign through custody today (`user` is excluded from the signing
-  // purposes at custody/src/gates.ts:31), so v1 anchors with a platform key and v2 is gated on
+  // purposes at custody/src/gates.ts), so v1 anchors with a platform key and v2 is gated on
   // that changing. That is precisely "the platform acted with authority over a user's property",
   // which is what this log exists to hold.
   //

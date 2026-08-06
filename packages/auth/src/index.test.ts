@@ -140,21 +140,21 @@ test('the scope registry is a closed, enumerated set — every widening is delib
  * that a capability exists somewhere.
  */
 test('the four scopes no gate in the estate demands are marked dead, not granted', () => {
-  // notify/src/server.ts:417 — /ingest is MAC-only. The signature over the raw bytes IS the
+  // notify/src/server.ts — /ingest is MAC-only. The signature over the raw bytes IS the
   // authentication; no bearer is read, so no scope can gate it. notify had already deleted its own
-  // `notify:ingest` constant on this reasoning and recorded it at notify/src/server.ts:99.
+  // `notify:ingest` constant on this reasoning and recorded it at notify/src/server.ts.
   assert.equal(isDeprecatedScope('notify:send'), true)
-  // wallet/src/server.ts:132 — read / write / money, three authorities, deliberately. Creating a
-  // wallet (:464) and assigning a deposit address (:605) are both `wallet:write`.
+  // wallet/src/server.ts — read / write / money, three authorities, deliberately. Creating a
+  // wallet and assigning a deposit address are both `wallet:write`.
   assert.equal(isDeprecatedScope('wallet:provision'), true)
-  // analytics/src/server.ts:514 — /ingest reads the raw bytes, verifies cf-signature over exactly
+  // analytics/src/server.ts — /ingest reads the raw bytes, verifies cf-signature over exactly
   // those bytes, and only then parses. No Authorization header is read, so no scope can gate it,
   // and no producer could have satisfied one: an outbox relay is a Postgres-poll background job
-  // with no session. analytics deleted its own SCOPE_INGEST and recorded why at server.ts:119.
+  // with no session. analytics deleted its own SCOPE_INGEST and recorded why at server.ts.
   assert.equal(isDeprecatedScope('analytics:ingest'), true)
-  // admin-api/src/server.ts:592 — POST /v1/events, the audit mirror, verifies cf-signature over the
+  // admin-api/src/server.ts — POST /v1/events, the audit mirror, verifies cf-signature over the
   // exact bytes BEFORE JSON.parse and reads no bearer. Same reason, same shape; admin-api deleted
-  // its own constant and recorded why at admin-api/src/scopes.ts:53.
+  // its own constant and recorded why at admin-api/src/scopes.ts.
   assert.equal(isDeprecatedScope('admin:audit:write'), true)
 
   // None of them is a scope to grant...

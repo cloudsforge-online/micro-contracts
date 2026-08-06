@@ -734,7 +734,7 @@ test('a chain token asset is named by its deployment, and a brand name is refuse
   const usdt = chainTokenAssetCode({ chain: 'eth', network: 'mainnet', contract: USDT_ETH })
   assert.equal(usdt, `TOKEN:eth:mainnet:${USDT_ETH}`)
 
-  // THE RULE. `settlement/src/sweeps.ts:499` — "NOTHING HERE MAY EVER WRITE `USDT`." A brand name
+  // THE RULE. `settlement/src/sweeps.ts` — "NOTHING HERE MAY EVER WRITE `USDT`." A brand name
   // has no chain, no network and no contract, so it cannot pass the shape at all.
   for (const brand of ['USDT', 'USDC', 'usdt', 'Tether']) {
     assert.throws(() => chainTokenAssetCode({ chain: brand, network: 'mainnet', contract: '' }), RangeError)

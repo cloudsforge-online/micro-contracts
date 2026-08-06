@@ -253,7 +253,7 @@ test("an EMBER testnet link goes to the TESTNET explorer, not the one that says 
   // `/testnet/`. The first fix pointed at `explorer.testnet.cloudsforge.online` — two labels —
   // which no longer resolves and never could under Cloudflare's one-label wildcard. A regex like
   // `/testnet/` passes on both the working host and the dead one, so it would have watched this
-  // line break without noticing. `micro-deploy/cloudflared/config.testnet.public.yml:78` serves
+  // line break without noticing. `micro-deploy/cloudflared/config.testnet.public.yml` serves
   // `explorer-testnet.cloudsforge.online`, and that exact string is the assertion.
   assert.equal(
     explorerTxUrl('EMBER', 'testnet', '0xdead'),
@@ -364,7 +364,7 @@ test('SHARD and EMBER do not share a scale, which is why relabelling is not conv
 /* ══════════════════════════════════════════════════════════ USD → coin, the peg's replacement */
 
 test('a USD price converts to coin at the administered rate', () => {
-  // EMBER's administered price is 0.25 USD (pricing/src/migrations.ts:185) = 250000 scaled.
+  // EMBER's administered price is 0.25 USD (pricing/src/migrations.ts) = 250000 scaled.
   const quarter = 250_000n
   // $2.50 = 250 cents. At $0.25/EMBER that is 10 EMBER.
   assert.equal(coinAmountForUsdCents(250n, 18, quarter), 10n * 10n ** 18n)

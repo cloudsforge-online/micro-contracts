@@ -160,7 +160,7 @@ test('a deprecated scope cannot be written where a live scope is required', () =
 
   // Three shapes, because the estate writes all three: the scalar, the frozen array an outbound
   // constant is declared as (`micro-market`/`micro-wallet`), and the call site that hands scopes to
-  // a token exchange (`beacon/src/ecosystem.ts:563`). Each generated line is expected to be red.
+  // a token exchange (`beacon/src/ecosystem.ts`). Each generated line is expected to be red.
   const rejected: string[] = []
   const expected = new Set<number>()
   for (const scope of DEPRECATED) {

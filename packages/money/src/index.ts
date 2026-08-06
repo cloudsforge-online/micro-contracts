@@ -84,16 +84,16 @@ export function isTokenAsset(code: LedgerAssetCode): code is TokenAssetCode {
  *
  * A subtype of `TokenAssetCode` rather than a narrowing of it, because `TOKEN:` carries two
  * unrelated urn families and always will: this one, and `micro-tessera`'s fired objects
- * (`tessera/src/itemasset.ts:86` builds `TOKEN:cf:tessera:object:<hex>`). Narrowing the parent
+ * (`tessera/src/itemasset.ts` builds `TOKEN:cf:tessera:object:<hex>`). Narrowing the parent
  * would break tessera's build, and every consumer resolves this package by `link:` at HEAD.
  *
  * ══════════════════════════════════════════════════════════════════════════════════════════════
  * ## `USDT` IS NOT AN ASSET CODE. NEITHER IS `USDC`. NEITHER IS ANY OTHER BRAND NAME.
  *
- * This is `settlement/src/sweeps.ts:499`'s rule, promoted here for the reason the Spark rule was
+ * This is `settlement/src/sweeps.ts`'s rule, promoted here for the reason the Spark rule was
  * promoted into `contracts-chain`: a rule that lives in one service is a rule the next service
- * does not know about. Settlement states it in a comment, `foresight/src/stakeassets.ts:141`
- * re-derives it as a regex, and `foresight/src/migrations.ts:771` re-derives it a third time as a
+ * does not know about. Settlement states it in a comment, `foresight/src/stakeassets.ts`
+ * re-derives it as a regex, and `foresight/src/migrations.ts` re-derives it a third time as a
  * CHECK constraint. Three spellings of one rule, and none of them in the contract they all import.
  *
  * The reason is arithmetic, not taste. **Tether is six decimals on Ethereum, six on Tron and
@@ -118,7 +118,7 @@ export type ChainTokenAssetCode = `TOKEN:${string}:${Network}:0x${string}`
 export interface ChainTokenAsset {
   /**
    * The chain slug. Lower-case, and **the estate does not agree on it**: `micro-custody` stores
-   * `ethereum` where `micro-settlement` uses `eth` (`settlement/src/sweeps.ts:520` translates
+   * `ethereum` where `micro-settlement` uses `eth` (`settlement/src/sweeps.ts` translates
    * between them). This package deliberately does not invent a third vocabulary to arbitrate
    * that — it validates the shape and leaves the slug to the services that already own one.
    */
@@ -131,7 +131,7 @@ export interface ChainTokenAsset {
 /**
  * The one shape a chain token asset code may take: `TOKEN:<chain>:<network>:<0x contract>`.
  *
- * Kept identical to `foresight/src/stakeassets.ts:141` and `foresight/src/migrations.ts:771` on
+ * Kept identical to `foresight/src/stakeassets.ts` and `foresight/src/migrations.ts` on
  * purpose, so that promoting this does not quietly admit a code those two would reject.
  */
 const CHAIN_TOKEN_CODE = /^TOKEN:([a-z0-9]+):([a-z0-9]+):(0x[0-9a-f]{40})$/
@@ -288,7 +288,7 @@ export function engagementSubject(service: string): AccountSubject {
  * The one entry kind an engagement grant is posted under — docs/ecosystem/21 §5.
  *
  * **`treasury_spend`, and it is not a compromise.** The ledger's kind vocabulary is CLOSED
- * (`journal_entries_kind_chk`, ledger/src/migrations.ts:181) precisely so that "how much did the
+ * (`journal_entries_kind_chk`, ledger/src/migrations.ts) precisely so that "how much did the
  * engagement programme spend" is answerable by counting rather than by grepping descriptions —
  * and an engagement account IS a treasury (purpose `treasury`, type `equity`), so a grant out of
  * it is literally a treasury spend. Naming it here, once, is what stops `market`, `worlds` and

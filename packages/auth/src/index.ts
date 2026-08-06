@@ -154,7 +154,7 @@ export interface ScopeSpec {
  *
  * ── Total against the estate, and kept that way mechanically (2026-08-02) ────────────────────
  * A full audit found this registry knew 14 scopes while the estate's services gated on 39 more —
- * identity fail-fasts on any grant naming an unknown scope (identity/src/env.ts:141), so most
+ * identity fail-fasts on any grant naming an unknown scope (identity/src/env.ts), so most
  * service-to-service surfaces were unreachable by identity-issued tokens while every suite
  * stayed green off its own fake principals. All 39 are now registered below, each citing the
  * gate that demands it. What keeps the list total is not this comment: micro-org's
@@ -253,24 +253,24 @@ export const SCOPES = Object.freeze({
    *
    *     $ node scope-audit.mjs src ../contracts/packages/auth/src/index.ts
    *     registered community:execute
-   *                  src/server.ts:1030 (= EXECUTE_SCOPE at src/scopes.ts:54)
+   *                  src/server.ts (= EXECUTE_SCOPE at src/scopes.ts)
    *     registered community:write
-   *                  src/server.ts:1056 (= WRITE_SCOPE at src/scopes.ts:53)
+   *                  src/server.ts (= WRITE_SCOPE at src/scopes.ts)
    *     scope-audit: ok — 2 demanded scope(s), all registered or exempted
    *
-   * Two, not three. `community/src/server.ts:142` imports `WRITE_SCOPE`, `EXECUTE_SCOPE`,
+   * Two, not three. `community/src/server.ts` imports `WRITE_SCOPE`, `EXECUTE_SCOPE`,
    * `SCOPES`, `SCOPE_NAMES` and `grantsScope` — and NOT `READ_SCOPE`; `authenticateService` has
-   * exactly two call sites (`:1030`, `:1056`); and community's reads are gated by MEMBERSHIP
-   * rather than by scope (`authoriseCommunity`, `:449` onwards — a `public` community is readable
+   * exactly two call sites; and community's reads are gated by MEMBERSHIP
+   * rather than by scope (`authoriseCommunity` onwards — a `public` community is readable
    * by anyone, and every other kind requires a role even to read).
    *
-   * **So what IS the defect?** `community/src/scopes.ts:38` declares `community:read` in the
+   * **So what IS the defect?** `community/src/scopes.ts` declares `community:read` in the
    * frozen `SCOPES` map it calls "every scope this service issues meaning for", exports it as
-   * `READ_SCOPE` at `:52`, and — the part that bites — SERVES it from `GET /v1/scopes`
-   * (`community/src/server.ts:524`, which maps over `SCOPE_NAMES`). That route is a service
+   * `READ_SCOPE`, and — the part that bites — SERVES it from `GET /v1/scopes`
+   * (`community/src/server.ts`, which maps over `SCOPE_NAMES`). That route is a service
    * telling an operator which scopes to grant. Grant the one it names and identity does not
    * degrade, it dies: `parseServiceGrants` throws `EnvError` at import on a scope `isScope` does
-   * not know (`identity/src/env.ts:167-171`), and the estate stops minting tokens at all.
+   * not know (`identity/src/env.ts`), and the estate stops minting tokens at all.
    *
    * Registering it makes `isScope('community:read')` true, so that grant is accepted — and marking
    * it `deprecated` is what keeps the OTHER direction honest. `org/tools/estate-scopes.mjs` clones
@@ -460,17 +460,17 @@ export const SCOPES = Object.freeze({
   /* ---------------------------------------------------------------------------------------------
    * TESSERA — 23-tessera.md §11.3. Three scopes, each registered in the same commit as the gate
    * that demands it, which §11.3 correctly calls "not a convention here, it is a build failure":
-   * the check at org/.github/workflows/service-ci.yml:197-212 derives demanded scopes and treats
+   * the check at org/.github/workflows/service-ci.yml derives demanded scopes and treats
    * an unresolvable derivation as fatal, and is itself mutation-tested at
-   * org/test/workflow-shell.test.ts:300.
+   * org/test/workflow-shell.test.ts.
    *
    * The line numbers below were read off micro-tessera's server.ts by running that workflow's own
    * extracted derivation against the repository, not by counting lines in an editor:
    *
    *     $ node scope-audit.mjs src ../contracts/packages/auth/src/index.ts
-   *     registered tessera:provision  src/server.ts:330 (= PROVISION_SCOPE at src/scopes.ts:39)
-   *     registered tessera:read       src/server.ts:361 (= READ_SCOPE at src/scopes.ts:26) + 11
-   *     registered tessera:write      src/server.ts:774 (= WRITE_SCOPE at src/scopes.ts:29)
+   *     registered tessera:provision  src/server.ts (= PROVISION_SCOPE at src/scopes.ts)
+   *     registered tessera:read       src/server.ts (= READ_SCOPE at src/scopes.ts) + 11
+   *     registered tessera:write      src/server.ts (= WRITE_SCOPE at src/scopes.ts)
    * ------------------------------------------------------------------------------------------ */
   'tessera:provision': Object.freeze({
     service: 'tessera',
@@ -622,7 +622,7 @@ export type DeprecatedScope = {
  * `isScope`, `knownScopes` and `ServiceClaims.scopes` must still be able to name it. Reading is
  * wide. **Demanding is narrow**: a service that says "my token must carry `notify:send`" is
  * declaring a grant identity refuses to issue, and identity fail-fasts on it at import
- * (`identity/src/env.ts:141`), so the deploy does not degrade — the identity container dies and
+ * (`identity/src/env.ts`), so the deploy does not degrade — the identity container dies and
  * the estate stops minting tokens at all.
  *
  * That is the same failure `readonly Scope[]` was introduced in `micro-market` and `micro-wallet`
@@ -662,10 +662,10 @@ export function isLiveScope(value: string): value is LiveScope {
  *
  * This exists because "declare exactly what you need" and "declare something" are in tension for
  * one real case. `micro-wallet`'s `PRICING_SCOPES` names `pricing:read` while the only route it
- * calls, `GET /rates` (`pricing/src/server.ts:312`), is ungated — the board is public. The grant
+ * calls, `GET /rates` (`pricing/src/server.ts`), is ungated — the board is public. The grant
  * is wider than the call sites need and was kept anyway, because `micro-deploy`'s
  * `derive-grants.mjs` reads a module that presents a credential and declares no scope as an
- * `undeclared` gap and fails the estate build (`deploy/scripts/derive-grants.mjs:321`). An empty
+ * `undeclared` gap and fails the estate build (`deploy/scripts/derive-grants.mjs`). An empty
  * array is indistinguishable from a forgotten declaration, so the honest answer was unsayable and
  * the service over-declared instead. An over-declaration is not a formality: it is a real grant on
  * a real token, and AD-05 is the rule that a token should carry the least it can.

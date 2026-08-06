@@ -240,14 +240,14 @@ export const TOPICS = Object.freeze({
   /**
    * THE TOPIC WITHOUT WHICH NOBODY CAN CREATE A WORKING ACCOUNT.
    *
-   * Registered from the verbatim spec identity left in `identity/src/topics.ts:108-119`
+   * Registered from the verbatim spec identity left in `identity/src/topics.ts`
    * (`AWAITING_REGISTRATION`), which it could not land itself — the same route the
    * `identity.session.revoked` entry above took.
    *
    * ── What its absence cost, measured on the live estate ────────────────────────────────────
    *
    * `micro-identity` 1.1.0 stopped minting a session at registration and emits this instead;
-   * `notify` renders `account.verify_email` from it (`notify/src/catalogue.ts:659`). Neither
+   * `notify` renders `account.verify_email` from it (`notify/src/catalogue.ts`). Neither
    * could work, because `validateEnvelope` refuses a topic this registry does not carry and
    * `notify` therefore answered `POST /ingest` with 400 for every one:
    *
@@ -262,7 +262,7 @@ export const TOPICS = Object.freeze({
    *
    * ── Why the link is in the payload ────────────────────────────────────────────────────────
    *
-   * identity does not speak SMTP by design (`identity/src/passwordReset.ts:173-179` rejects a
+   * identity does not speak SMTP by design (`identity/src/passwordReset.ts` rejects a
    * second mail transport by name), so the absolute link travels here and lands in notify's
    * database. That is the same trade every notification's template parameters already make, and
    * it is why the token is single-use and expires in 24 hours.
@@ -322,7 +322,7 @@ export const TOPICS = Object.freeze({
     description: 'A second factor was revoked, flagging whether it was the last active one.',
   }),
   /**
-   * Emitted at `identity/src/mfa.ts:563` (activation, and recovery-code regeneration) since the
+   * Emitted at `identity/src/mfa.ts` (activation, and recovery-code regeneration) since the
    * `identity.mfa.changed` split, and mapped by `notify` since its catalogue was written — so the
    * consumer existed for the whole life of the service and could never fire, because no registry
    * named the topic. One payload shape, `MfaFactorAdded`, exactly as `MfaFactorRemoved` is.
@@ -352,8 +352,8 @@ export const TOPICS = Object.freeze({
   /**
    * A live producer emitted this unregistered for the life of the service.
    *
-   * `wallet/src/wallets.ts:214` writes it in the same transaction as the row, keyed by the wallet
-   * id (`wallet/src/outbox.ts:49`), and `notify` has held a rule for it since its catalogue was
+   * `wallet/src/wallets.ts` writes it in the same transaction as the row, keyed by the wallet
+   * id (`wallet/src/outbox.ts`), and `notify` has held a rule for it since its catalogue was
    * written. Same finding as the worlds and emberkin waves above: consumers validate envelopes
    * against this list, so an unregistered topic from a live producer is quarantined as
    * unclassifiable however correct the delivery is.
@@ -398,7 +398,7 @@ export const TOPICS = Object.freeze({
    * `keyedBy` is stated from what wallet ACTUALLY sends rather than from what would be tidy,
    * because the key is the ordering partition and changing it silently reorders every consumer's
    * view. `wallet.deposit_address.assigned` is keyed `chain:network:address_key`
-   * (`wallet/src/deposits.ts:353`) and that is right for it: assignments for one address must stay
+   * (`wallet/src/deposits.ts`) and that is right for it: assignments for one address must stay
    * ordered against each other through a rotation, and they are the only ones that must.
    * ────────────────────────────────────────────────────────────────────────────────────────────── */
   'wallet.deposit_address.assigned': Object.freeze({
@@ -464,13 +464,13 @@ export const TOPICS = Object.freeze({
    * without making anything true.
    *
    * **REFUSED: `settlement.outbound.stuck`.** It is not a second fact. `settlement/src/
-   * withdrawals.ts:517-547` builds ONE `payload` object and emits it twice — once as
+   * withdrawals.ts` builds ONE `payload` object and emits it twice — once as
    * `settlement.withdrawal.stuck` keyed `chain:network`, once as `settlement.outbound.stuck` keyed
    * `row.id` — so the two differ in nothing but their partition. Nothing in the estate subscribes
-   * to the second name (the only mentions outside settlement are `notify/src/topics.ts:126` and
-   * `org/tools/estate-topic-gaps.json:38`, both describing it as the defect), and the registered
+   * to the second name (the only mentions outside settlement are `notify/src/topics.ts` and
+   * `org/tools/estate-topic-gaps.json`, both describing it as the defect), and the registered
    * event already carries the row: `base(row)` puts `outboundId: row.id` on the payload
-   * (`withdrawals.ts:411-412`), so an operator queue can order by a field it is already sent.
+   * (`withdrawals.ts`), so an operator queue can order by a field it is already sent.
    * Registering it would put a second official name on one fact — which is `wallet.deposit.credited`
    * against `wallet.deposit.confirmed` run deliberately instead of by accident, and it would make
    * "which name does a stuck withdrawal have" a question with two right answers forever. A topic is
@@ -478,22 +478,22 @@ export const TOPICS = Object.freeze({
    *
    * None of the three below has the shape that made `identity.mfa.changed` unregisterable — one
    * name over four payload shapes chosen by a discriminator. Each carries exactly one shape:
-   * `confirmedEvents` (:436), `failedEvents` (:475) and `sweepCompletedEvents`
-   * (`sweeps.ts:472`) each build a single object literal with fixed keys. `refundable` on
+   * `confirmedEvents`, `failedEvents` and `sweepCompletedEvents`
+   * (`sweeps.ts`) each build a single object literal with fixed keys. `refundable` on
    * `.failed` is a boolean FIELD every instance carries, not a selector between payloads — the same
    * distinction `identity.session.revoked`'s `reason` passes.
    * ------------------------------------------------------------------------------------------ */
   /**
    * **Wallet's name, and the most load-bearing topic this service emits.**
    *
-   * `wallet/src/settlement.ts:167` declares this exact string and `wallet/src/server.ts:859`
+   * `wallet/src/settlement.ts` declares this exact string and `wallet/src/server.ts`
    * branches on it to release the user's reservation — spelled there before `settlement` existed, so
    * the registry follows the live contract rather than renaming it for tidiness. Deliberately
    * narrower than `settlement.withdrawal.completed`, which carries the same fact with the whole
    * outbound transaction on it for notify and the operator surfaces; a subscription is per topic, so
    * no consumer sees both.
    *
-   * Keyed by the WITHDRAWAL, not settlement's outbound row: `withdrawals.ts:442` passes
+   * Keyed by the WITHDRAWAL, not settlement's outbound row: `withdrawals.ts` passes
    * `row.sourceRef`, and the withdrawal id is the only one of the two identifiers wallet holds.
    */
   'settlement.outbound.confirmed': Object.freeze({
@@ -507,9 +507,9 @@ export const TOPICS = Object.freeze({
   /**
    * The other terminal outcome, and `refundable` is why it cannot be folded into the one above.
    *
-   * `wallet/src/server.ts:869-876` returns the reservation to the user's balance only when
+   * `wallet/src/server.ts` returns the reservation to the user's balance only when
    * `refundable === true`, and defaults it to false, because refunding a payment that actually
-   * landed pays the user twice. `notify/src/topics.ts:124` has recorded a notification for this
+   * landed pays the user twice. `notify/src/topics.ts` has recorded a notification for this
    * exact string with "no producer" for the life of that service — the producer existed all along
    * and no registry named it.
    */
@@ -609,7 +609,7 @@ export const TOPICS = Object.freeze({
    * throw that away for nothing.
    *
    * `keyedBy: 'listing_id'` was re-read off the emit site before pasting rather than trusted:
-   * `market/src/bids.ts:449` emits `topic: OFFER_MADE_TOPIC` and `:450` passes `key: listing.id`,
+   * `market/src/bids.ts` emits `topic: OFFER_MADE_TOPIC` and passes `key: listing.id`,
    * where `listing` is `toListing` of the `listings` row that transaction is holding `for update`.
    * It is the LISTING, not the offer and not either party — which is right, because ordering must
    * be per listing: two offers on one listing are the same contention, and keying by offer id
@@ -625,7 +625,7 @@ export const TOPICS = Object.freeze({
    * person who ACTED, so before that field existed the only notification this event could produce
    * would have told the offerer their own offer had arrived. `micro-notify` refused to write the
    * rule for exactly that reason and recorded the refusal (`blockedBy: 'no-subject'`); market added
-   * the field (`bids.ts:477`, read off the same `for update` row) and the refusal ended.
+   * the field (`bids.ts`, read off the same `for update` row) and the refusal ended.
    */
   'market.offer.made': Object.freeze({
     producer: 'market',
@@ -646,8 +646,8 @@ export const TOPICS = Object.freeze({
    * Two more topics a live producer was already emitting unregistered — the same finding as worlds
    * and wallet above, found by reconciling `notify`'s rule table against this registry.
    *
-   * Both are keyed by the PROPOSAL, not the community: `community/src/jobs.ts:221` and
-   * `community/src/votes.ts:227` both pass the proposal id as the key, and the key is the ordering
+   * Both are keyed by the PROPOSAL, not the community: `community/src/jobs.ts` and
+   * `community/src/votes.ts` both pass the proposal id as the key, and the key is the ordering
    * partition, so it is contract rather than a producer's private choice. Note that
    * `community.proposal.executed` above is keyed by `community_id` and that difference is real —
    * a consumer that assumed one keying for the family would mis-order the other two.
@@ -832,17 +832,17 @@ export const TOPICS = Object.freeze({
    *     four-value discriminator over four different shapes and was unregisterable by
    *     construction, because a `TopicSpec` gives a topic exactly one `payloadType`. Each of these
    *     three has exactly one emit site with exactly one shape —
-   *     `trade/src/bots.ts:614` (`{ botId }`), `devplatform/src/apikeys.ts:272` (`emitKeyIssued`,
-   *     the only caller path being `devplatform/src/server.ts:911`) and
-   *     `devplatform/src/apikeys.ts:357` (`emitKeyRevoked`, called from `server.ts:965` and
-   *     `server.ts:1527` with the SAME payload builder and only the actor differing, which is a
+   *     `trade/src/bots.ts` (`{ botId }`), `devplatform/src/apikeys.ts` (`emitKeyIssued`,
+   *     the only caller path being `devplatform/src/server.ts`) and
+   *     `devplatform/src/apikeys.ts` (`emitKeyRevoked`, called from `server.ts` and
+   *     `server.ts` with the SAME payload builder and only the actor differing, which is a
    *     field and not a discriminator).
    *
    *   - **`keyedBy` is what the producer really passes**, read off the emit site rather than taken
    *     from the spec. This is the `custody` lesson: both ceremony topics were registered
    *     `keyedBy: 'user_id'` while the emit sites passed the ADDRESS, and `activity` reads the
    *     envelope key AS the user id, so every export event was filed against a user that does not
-   *     exist. Verified here: `bots.ts:614` passes `bot.id`, and both `apikeys.ts` emitters pass
+   *     exist. Verified here: `bots.ts` passes `bot.id`, and both `apikeys.ts` emitters pass
    *     `key.id` — matching `bot_id`, `key_id` and `key_id` below.
    *
    * Landing these makes `adoptedProposals()` non-empty in `micro-trade`, `micro-devplatform` and

@@ -10,23 +10,23 @@
  * by the absence of it**, and every one of the three is a shape held in two repositories that
  * disagree.
  *
- *   1. **The achievement route does not exist.** `nda/src/worldsclient.ts:69` and
- *      `emberkin/src/worldsclient.ts:69` both `POST /internal/achievements`. `worlds/src/server.ts`
- *      defines 22 routes (`:374`–`:847`) and none of them is `/internal/achievements`; the route
- *      that unlocks an achievement is `POST /v1/titles/:id/achievements/unlock` (`:775`). A 404 is
+ *   1. **The achievement route does not exist.** `nda/src/worldsclient.ts` and
+ *      `emberkin/src/worldsclient.ts` both `POST /internal/achievements`. `worlds/src/server.ts`
+ *      defines 22 routes (–) and none of them is `/internal/achievements`; the route
+ *      that unlocks an achievement is `POST /v1/titles/:id/achievements/unlock`. A 404 is
  *      a 4xx, so `HttpError.peerDecided` is true, so both clients raise `WorldsRefusedError`, which
- *      `nda/src/achievements.ts:91` records as the terminal outcome `'refused'` and never retries.
+ *      `nda/src/achievements.ts` records as the terminal outcome `'refused'` and never retries.
  *      Every cross-title badge in the estate is dropped, permanently and quietly.
  *
  *   2. **The scope is wrong.** Both clients declare `WORLDS_SCOPES = ['worlds:write']`
- *      (`nda/src/worldsclient.ts:15`, `emberkin/src/worldsclient.ts:15`). The unlock route demands
- *      `worlds:title` (`worlds/src/server.ts:777`, constant at `:106`). Fixing (1) alone would
+ *      (`nda/src/worldsclient.ts`, `emberkin/src/worldsclient.ts`). The unlock route demands
+ *      `worlds:title` (`worlds/src/server.ts`, constant). Fixing (1) alone would
  *      turn a 404 into a 403 — still terminal, still silent.
  *
  *   3. **The identifier is a different kind of thing.** The clients send `titleSlug` in the body;
- *      `itemIdOf` (`worlds/src/server.ts:968-972`) refuses anything that is not a UUID and answers
+ *      `itemIdOf` (`worlds/src/server.ts`) refuses anything that is not a UUID and answers
  *      404. And the field is spelled `code` on the sending side and `key` on the serving side
- *      (`worlds/src/server.ts:781`).
+ *      (`worlds/src/server.ts`).
  *
  * Two title services hold byte-identical 89-line copies of that client — `nda/src/worldsclient.ts`
  * and `emberkin/src/worldsclient.ts` differ in exactly one word of one comment — so the estate
@@ -34,8 +34,8 @@
  * package, met three times over.
  *
  * The provision half is the same story with a happier ending so far: `ProvisionRequest` /
- * `ProvisionResult` at `worlds/src/titleclient.ts:56-74` and `ProvisionInput` / `ProvisionOutcome`
- * at `aetherholm/src/provisioning.ts:39-53` are field-for-field the same seven and two fields under
+ * `ProvisionResult` at `worlds/src/titleclient.ts` and `ProvisionInput` / `ProvisionOutcome`
+ * at `aetherholm/src/provisioning.ts` are field-for-field the same seven and two fields under
  * two names in two repositories. They agree today because one author wrote both within a week.
  *
  * ## What this package deliberately does NOT own
@@ -109,12 +109,12 @@ function requiredString(
 /**
  * What a title can be asked to do.
  *
- * A closed set rather than free text, for the reason `worlds/src/titles.ts:36-42` gives: these are
+ * A closed set rather than free text, for the reason `worlds/src/titles.ts` gives: these are
  * read by the provisioning bridge to decide whether a purchase can be delivered at all, so free
  * text turns a typo in a registration into a purchase that is accepted and never provisioned.
  *
  * The registry lives here rather than in `worlds` because the typo is made at the OTHER end.
- * `aetherholm/src/server.ts:107-111` builds its descriptor from a bare string literal —
+ * `aetherholm/src/server.ts` builds its descriptor from a bare string literal —
  * `capabilities: Object.freeze(['private_world'])` — with nothing to check it against, which is
  * exactly the gap `worlds/src/conformance.ts` check 4 exists to notice after the fact.
  */
@@ -141,7 +141,7 @@ export function isCapability(value: string): value is Capability {
  *
  * This map is the fix for defect 2 in the file header. Both title clients guessed `worlds:write`,
  * which is the scope a *player-facing* write needs; a title service acts under `worlds:title`
- * (`worlds/src/server.ts:106`), a separate authority precisely so that a title's credential cannot
+ * (`worlds/src/server.ts`), a separate authority precisely so that a title's credential cannot
  * edit a player's profile.
  *
  * Every value is checked against `@cloudsforge/contracts-auth`'s live registry by `index.test.ts`,
@@ -169,18 +169,18 @@ export const WORLDS_OPERATIONS: readonly WorldsOperation[] = Object.freeze([
 ])
 
 export const SCOPE_FOR: Readonly<Record<WorldsOperation, WorldsScope>> = Object.freeze({
-  // worlds/src/server.ts:754-758 — `requireScope(principal, TITLE_SCOPE)`.
+  // worlds/src/server.ts — `requireScope(principal, TITLE_SCOPE)`.
   defineAchievement: 'worlds:title',
-  // worlds/src/server.ts:775-779 — the same gate. NOT `worlds:write`; see the file header.
+  // worlds/src/server.ts — the same gate. NOT `worlds:write`; see the file header.
   unlockAchievement: 'worlds:title',
-  // worlds/src/server.ts:524 — the registry is an administrator's surface.
+  // worlds/src/server.ts — the registry is an administrator's surface.
   registerTitle: 'worlds:admin',
 })
 
 /**
  * The scope worlds' own credential must carry when it calls a title.
  *
- * Read from the title's side: `aetherholm/src/server.ts:102` names `aetherholm:provision`, and a
+ * Read from the title's side: `aetherholm/src/server.ts` names `aetherholm:provision`, and a
  * title checks it rather than assuming it (`titlecontract.test.ts` contract 8/9). The scope is
  * therefore `<title slug>:provision`, derived rather than enumerated, because a title added
  * tomorrow must not need a release of this package to be callable.
@@ -196,8 +196,8 @@ export function provisionScopeFor(titleSlug: string): string {
 /**
  * `cf:<title>:<kind>:<id>` — what a title made, in a form anything in the estate can point at.
  *
- * `worlds/src/titleclient.ts:70` documents the shape and nothing validates it; a 2xx carrying a urn
- * of the wrong shape is recorded and pointed at for ever. `aetherholm/src/provisioning.ts:55`
+ * `worlds/src/titleclient.ts` documents the shape and nothing validates it; a 2xx carrying a urn
+ * of the wrong shape is recorded and pointed at for ever. `aetherholm/src/provisioning.ts`
  * builds one by template literal, which is correct today and unchecked.
  */
 export interface TitleUrn {
@@ -257,7 +257,7 @@ export function serialiseTitleDescriptor(descriptor: TitleDescriptor): Record<st
  * Read a descriptor, and refuse a capability the registry does not know.
  *
  * This is the check that makes a typo'd capability a failed registration rather than a purchase
- * that is accepted and never delivered. `worlds/src/titleclient.ts:120-125` accepts any string
+ * that is accepted and never delivered. `worlds/src/titleclient.ts` accepts any string
  * array today.
  */
 export function parseTitleDescriptor(body: unknown): Validated<TitleDescriptor> {
@@ -303,7 +303,7 @@ export const PROVISION_PATH = '/v1/provision'
 /**
  * The bridge's request. Seven fields, and the entitlement id is the idempotency key.
  *
- * `worlds/src/titleclient.ts:56-67` and `aetherholm/src/provisioning.ts:39-47` are this interface
+ * `worlds/src/titleclient.ts` and `aetherholm/src/provisioning.ts` are this interface
  * under two names in two repositories.
  */
 export interface ProvisionRequest {
@@ -322,7 +322,7 @@ export interface ProvisionRequest {
 /**
  * The wire fields, pinned — and `correlationId` is deliberately not one of them.
  *
- * `worlds/src/titleclient.ts:137-144` sends six body fields and passes the correlation id as the
+ * `worlds/src/titleclient.ts` sends six body fields and passes the correlation id as the
  * request id header instead. A receiver that made `correlationId` a required body field would 400
  * every real request from the bridge, and would pass every test written from the interface.
  */
@@ -350,7 +350,7 @@ export function serialiseProvisionRequest(request: ProvisionRequest): Record<str
  * The idempotency key, in one place.
  *
  * Sent in the `Idempotency-Key` header AND repeated in the body, for the two different reasons
- * `worlds/src/titleclient.ts:145-148` gives: the header is what makes a POST retriable at all, the
+ * `worlds/src/titleclient.ts` gives: the header is what makes a POST retriable at all, the
  * body field is what the title stores and dedupes on. A title that derives its key from anything
  * else raises a second world for one purchase.
  */
@@ -411,7 +411,7 @@ export function serialiseProvisionResult(result: ProvisionResult): Record<string
  * Read a provision result.
  *
  * A 2xx with no urn is a title claiming a success it cannot name, and is treated as an outage
- * rather than a success — `worlds/src/titleclient.ts:151-156` already does this, for the reason
+ * rather than a success — `worlds/src/titleclient.ts` already does this, for the reason
  * that recording `provisioned` with no urn would break `provisions_provisioned_is_complete`
  * anyway. The urn's SHAPE is checked here too, which is new: an ill-formed urn is stored and
  * pointed at for ever.
@@ -436,7 +436,7 @@ export function parseProvisionResult(body: unknown): Validated<ProvisionResult> 
 /**
  * The title asked for something it does not sell: 422, code `unsupported`.
  *
- * An ANSWER, not a fault. `worlds/src/titleclient.ts:174-177` treats it as terminal and stops
+ * An ANSWER, not a fault. `worlds/src/titleclient.ts` treats it as terminal and stops
  * retrying, which is right: retrying is guaranteed to fail again, and burning the attempt budget on
  * it hides the case an operator needs to see — a customer paid for something that cannot be
  * delivered, which is a catalogue mistake and a refund.
@@ -453,7 +453,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 /**
  * The title's id is a **UUID in the path**, not a slug in the body.
  *
- * `worlds/src/server.ts:968-972` answers 404 to anything else, before the handler runs. Both title
+ * `worlds/src/server.ts` answers 404 to anything else, before the handler runs. Both title
  * clients send `titleSlug` in the body and address a route that does not exist; a title that
  * adopts this package gets a local, named failure instead of a 404 it will record as permanent.
  */
@@ -474,7 +474,7 @@ export function achievementUnlockPath(titleId: string): string {
 /**
  * An achievement a title can award.
  *
- * It must be DEFINED before it can be unlocked: `worlds/src/rewards.ts:215-216` looks it up by
+ * It must be DEFINED before it can be unlocked: `worlds/src/rewards.ts` looks it up by
  * `(titleId, key)` and refuses when there is none. Both title clients send `name` and `points` on
  * the unlock instead, which is a client that believes worlds will create the achievement for it.
  * Two calls, two documents, and this is the first of them.
@@ -558,7 +558,7 @@ export function parseAchievementDefinition(body: unknown): Validated<Achievement
 /**
  * The unlock. Two fields, and the title is in the path.
  *
- * `worlds/src/server.ts:780-782` reads exactly `userId` and `key`; the title comes from
+ * `worlds/src/server.ts` reads exactly `userId` and `key`; the title comes from
  * `itemIdOf(ctx)`. The clients spell the second field `code`.
  */
 export interface AchievementUnlock {
@@ -587,7 +587,7 @@ export function parseAchievementUnlock(body: unknown): Validated<AchievementUnlo
  *
  * Derived from `(titleId, userId, key)` and from nothing else — never from a job id, a row id or a
  * timestamp. A job that is retried, redelivered or run by a different replica must present the same
- * key, or worlds records the badge twice. `nda/src/achievements.ts:87` derives its own from
+ * key, or worlds records the badge twice. `nda/src/achievements.ts` derives its own from
  * `(slug, userId, achId)`, which is the same intent with a different alphabet; one spelling is the
  * point of putting it here.
  */
@@ -598,7 +598,7 @@ export function achievementIdempotencyKey(unlock: AchievementUnlock & { titleId:
 /**
  * What worlds answers.
  *
- * **201 on a fresh unlock, 200 on one that had already happened** (`worlds/src/server.ts:788-793`).
+ * **201 on a fresh unlock, 200 on one that had already happened** (`worlds/src/server.ts`).
  * A title re-evaluating its achievements every tick can tell the difference from the status alone,
  * which is why `unlocked` is not the only signal — and why a client that treats any 2xx as "new
  * badge" will announce the same badge on every tick.

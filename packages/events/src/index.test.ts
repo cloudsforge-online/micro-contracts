@@ -109,7 +109,7 @@ test('the four adopted proposals match the emit site they were read from', () =>
       producer: 'trade',
       payloadType: 'BotPaused',
       version: '1.0',
-      // trade/src/bots.ts:614 — `key: bot.id`, payload `{ botId: bot.id }`, the only emit site.
+      // trade/src/bots.ts — `key: bot.id`, payload `{ botId: bot.id }`, the only emit site.
       keyedBy: 'bot_id',
       description: 'A bot stopped trading.',
     },
@@ -121,7 +121,7 @@ test('the four adopted proposals match the emit site they were read from', () =>
       producer: 'devplatform',
       payloadType: 'ApiKeyIssued',
       version: '1.0',
-      // devplatform/src/apikeys.ts:272-274 — `key: key.id`, one payload builder.
+      // devplatform/src/apikeys.ts — `key: key.id`, one payload builder.
       keyedBy: 'key_id',
       description: 'An API key was issued for a project, with its scopes and prefix.',
     },
@@ -133,8 +133,8 @@ test('the four adopted proposals match the emit site they were read from', () =>
       producer: 'devplatform',
       payloadType: 'ApiKeyRevoked',
       version: '1.0',
-      // devplatform/src/apikeys.ts:357-359 — `key: key.id` from both callers (server.ts:965 and
-      // server.ts:1527); only `actor` differs between them, and an actor is not a discriminator.
+      // devplatform/src/apikeys.ts — `key: key.id` from both callers (server.ts and
+      // server.ts); only `actor` differs between them, and an actor is not a discriminator.
       keyedBy: 'key_id',
       description:
         'An API key was revoked. Every cache holding a verification result for it must drop it.',
@@ -147,8 +147,8 @@ test('the four adopted proposals match the emit site they were read from', () =>
       producer: 'market',
       payloadType: 'OfferMade',
       version: '1.0',
-      // market/src/bids.ts:449-450 — `topic: OFFER_MADE_TOPIC`, `key: listing.id`, where `listing`
-      // is the `listings` row the emitting transaction holds `for update` (bids.ts:406). The
+      // market/src/bids.ts — `topic: OFFER_MADE_TOPIC`, `key: listing.id`, where `listing`
+      // is the `listings` row the emitting transaction holds `for update` (bids.ts). The
       // LISTING, not the offer: two offers on one listing are the same contention and must order
       // against each other, and it is the key `market.listing.sold` already uses.
       keyedBy: 'listing_id',

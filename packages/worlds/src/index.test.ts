@@ -75,8 +75,8 @@ test('every cross-repository operation names the scope its server demands', () =
     assert.ok(SCOPE_FOR[operation], `${operation} names no scope`)
   }
   // Defect 2 from the file header, as an assertion rather than a comment: both title clients
-  // declared `worlds:write` (nda/src/worldsclient.ts:15, emberkin/src/worldsclient.ts:15) and the
-  // route demands `worlds:title` (worlds/src/server.ts:777).
+  // declared `worlds:write` (nda/src/worldsclient.ts, emberkin/src/worldsclient.ts) and the
+  // route demands `worlds:title` (worlds/src/server.ts).
   assert.equal(SCOPE_FOR.unlockAchievement, 'worlds:title')
   assert.equal(SCOPE_FOR.defineAchievement, 'worlds:title')
   assert.equal(SCOPE_FOR.registerTitle, 'worlds:admin')
@@ -127,9 +127,9 @@ test('a descriptor round-trips, and the wire fields are exactly the pinned three
 })
 
 test('a capability the registry does not know is refused, not carried', () => {
-  // The typo'd capability. `aetherholm/src/server.ts:110` builds this array from a bare literal
+  // The typo'd capability. `aetherholm/src/server.ts` builds this array from a bare literal
   // with nothing to check it against, and worlds accepts any string array today
-  // (worlds/src/titleclient.ts:120-125) — so a purchase is taken for something nothing sells.
+  // (worlds/src/titleclient.ts) — so a purchase is taken for something nothing sells.
   const parsed = parseTitleDescriptor({
     slug: 'aetherholm',
     name: 'Aetherholm',
@@ -192,7 +192,7 @@ test('a provision request round-trips through the receiver parser', () => {
 /**
  * `correlationId` is NOT a body field, and a receiver that made it one would 400 every real
  * request from the bridge while passing every test written from the interface.
- * `worlds/src/titleclient.ts:137-149` sends six body fields and the correlation id as `requestId`.
+ * `worlds/src/titleclient.ts` sends six body fields and the correlation id as `requestId`.
  */
 test('the correlation id travels as the request id, never in the body', () => {
   const wire = serialiseProvisionRequest(provisionRequest)
@@ -268,7 +268,7 @@ test('a urn round-trips and refuses every shape that is not one', () => {
 /* ------------------------------------------------------------------ achievements */
 
 test('the title is a uuid in the path, not a slug in the body', () => {
-  // Defect 3. `worlds/src/server.ts:968-972` answers 404 before the handler runs, so a title
+  // Defect 3. `worlds/src/server.ts` answers 404 before the handler runs, so a title
   // sending its slug gets a permanent refusal it will never diagnose.
   assert.equal(isTitleId('7f3a1b2c-4d5e-4f60-8a9b-0c1d2e3f4a5b'), true)
   assert.equal(isTitleId('aetherholm'), false)
@@ -333,7 +333,7 @@ test('an unlock carries exactly userId and key — the achievement must already 
   assert.ok(parsed.ok, errorsOf(parsed).join('; '))
   assert.deepEqual(parsed.value, unlock)
 
-  // `worlds/src/rewards.ts:215-216` refuses an unlock for an achievement that was never defined,
+  // `worlds/src/rewards.ts` refuses an unlock for an achievement that was never defined,
   // so name and points on the unlock are a client that believes worlds will create it. They are
   // not wire fields here; they belong to the definition document.
   assert.equal(ACHIEVEMENT_UNLOCK_FIELDS.includes('name'), false)
