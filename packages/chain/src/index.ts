@@ -46,7 +46,7 @@ export type Network = 'mainnet' | 'testnet'
  * (`org/.github/workflows/service-ci.yml`), so the union is shared at HEAD by roughly a dozen
  * repositories at once — see the header, which used to claim otherwise.
  */
-export type AssetCode = 'EMBER' | 'BTC' | 'ETH' | 'SOL' | 'XRP' | 'LTC' | 'SHARD'
+export type AssetCode = 'EMBER' | 'BTC' | 'ETH' | 'SOL' | 'XRP' | 'LTC' | 'DOGE' | 'ETC' | 'SHARD'
 
 /**
  * The assets that are being wound down. Nothing may be newly denominated in one.
@@ -231,6 +231,100 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
     chainId: Object.freeze({ mainnet: 1, testnet: 11155111 }),
     explorerTxUrl: explorers('https://etherscan.io/tx/', 'https://sepolia.etherscan.io/tx/'),
   }),
+  /**
+   * Ethereum Classic. The EVM family's second network, and **the deepest credit depth in this
+   * file by three orders of magnitude.** That number is the entire content of this comment.
+   *
+   * `family: 'evm'` and no new family, which is what `docs/ecosystem/29-native-assets.md` §2
+   * already decided when it worked the question through for BSC: "Adding it means either a second
+   * asset code with its own spec (fine, that is what BNB is) or a notion of *network within family*
+   * that the type does not have. Prefer the former." ETC is that shape exactly — same EVM, same
+   * `eth_*` JSON-RPC, same 18 decimals, same address encoding, different chain ids.
+   *
+   * ── CONFIRMATIONS ARE 7500, NOT ETH'S 12, AND THE REASON IS THIS CHAIN'S OWN HISTORY ──────────
+   *
+   * Ethereum Classic is a minority-hashrate proof-of-work chain that has been 51%-attacked
+   * repeatedly, and the reorganisations were not deep in the way a chain analyst means "deep" —
+   * they were deep in the way that makes a confirmation depth meaningless. Reported depths:
+   *
+   *   2019-01     ~100 blocks     double spends of roughly 219,500 ETC
+   *   2020-08-01  ~3,693 blocks
+   *   2020-08-06  ~4,236 blocks
+   *   2020-08-29  ~7,000 blocks
+   *
+   * MEASURED 2026-08-08 against `https://etc.rivet.link`: `eth_chainId` answers `0x3d` (61), and
+   * 10,000 blocks either side of head spanned 137,004 seconds — **a mean block time of 13.70s**.
+   * So those reorgs were, respectively, ~23 minutes, ~14.1 hours, ~16.1 hours and ~26.6 hours of
+   * chain. ETH's twelve confirmations is **2.7 minutes** on this chain. Every one of the four
+   * attacks above would have retracted a deposit credited at that depth, and three of them would
+   * have retracted a deposit credited at any depth a person would call generous.
+   *
+   * **The rule chosen is: credit no shallower than the deepest reorganisation this chain has
+   * actually produced.** 7,500 × 13.70s ≈ 28.5 hours, which clears the 2020-08-29 event with
+   * margin. It is a rule rather than a feeling because the alternatives are all feelings: any
+   * number between 12 and 7,000 is a bet that the next attack is smaller than the last one, and
+   * this estate's central guarantee is that no balance exists that the chain does not back.
+   *
+   * **WHAT HAS CHANGED SINCE 2020, AND WHY IT IS NOT A REASON TO GO SHALLOWER.** ETC adopted MESS
+   * (ECIP-1100) in late 2020, which prices deep reorgs out subjectively, and the Ethereum merge in
+   * 2022 pushed a large body of GPU hashrate onto Etchash, so rentable hashrate as a fraction of
+   * ETC's own is far below what it was. Both are real and both are mitigations. A confirmation
+   * depth is not a mitigation — it is what the estate is left holding when the mitigations fail,
+   * which is the only circumstance in which the number is ever read. Setting it from the strength
+   * of a defence rather than from the damage it is defending against is how BTC came to sit at 3.
+   *
+   * **THE COST IS ~28 HOURS TO CREDIT AN ETC DEPOSIT, AND IT IS BEING PAID DELIBERATELY.** That is
+   * a product decision as much as a security one and it should be argued again by whoever wants
+   * ETC deposits to feel instant. What must not happen is that it is argued by *lowering this
+   * number quietly*: `index.test.ts` pins it, and the pin is the intended experience. The same
+   * freedom the BTC note above relies on applies here — `INDEXER_CHAINS` has never followed ETC,
+   * no ETC deposit has ever been credited at any depth, so there is no in-flight deposit to
+   * re-judge. Changing it costs nothing today and is a migration after the first real deposit.
+   *
+   * `reorgAlarmDepth: 100` is anchored on the same table from the other end: alarm at the depth of
+   * the SMALLEST attack this chain has suffered, credit past the depth of the LARGEST. 100 blocks
+   * is ~23 minutes, far above ordinary one- and two-block noise, and it fires roughly 27 hours
+   * before anything could be wrongly credited — which is the whole point of having the two numbers
+   * be different. ETH's 3 would be ~41 seconds and would page on ordinary chain behaviour.
+   *
+   * ── GAS: ETC IS LEGACY, NOT EIP-1559, AND IT FALLS ON EMBER'S SIDE OF THE LINE ────────────────
+   *
+   * `docs/ecosystem/35-chain-solvency-invariant.md` §G4 draws the line and states the consequence:
+   * settlement fixes an outbound's fee at planning time as `gasPrice × TRANSFER_GAS` and books
+   * that figure, "so on a legacy-gas EVM chain the platform pays *exactly* what was booked … Any
+   * EIP-1559 chain must book from the receipt (`gasUsed × effectiveGasPrice`) before it is
+   * reconciled", because otherwise the booked estimate exceeds the burn on nearly every
+   * transaction and zero tolerance turns that into a freeze per payment.
+   *
+   * **ETC did not adopt London.** There is no base fee, no `maxFeePerGas`, and the effective gas
+   * price is the one that was signed. ETC therefore sits with EMBER on the safe side, and the
+   * plan-time booking is exact for it — no receipt-reading work is required to reconcile ETC.
+   *
+   * This is recorded as prose rather than as a field because `ChainSpec` has no gas model on it
+   * and one should not be invented here for a single consumer: nothing in `contracts` branches on
+   * EIP-1559, and `settlement/src/fees.ts` and `settlement/src/evm.ts` are where the distinction is
+   * acted on. **Note for whoever wires the EVM adapter: the asset on this family that DOES need the
+   * receipt fix is ETH, not ETC, and it needs it today rather than because of this change.**
+   *
+   * Chain ids measured live on 2026-08-08 rather than copied from a list: mainnet `eth_chainId` is
+   * `0x3d` = 61 (`etc.rivet.link` and `etc.etcdesktop.com`, independently), and Mordor's is `0x3f`
+   * = 63 (`rpc.mordor.etccooperative.org`). Mordor is the surviving ETC testnet; Kotti (6) was
+   * retired and Morden (62) long before it, so 63 is the only honest value for `testnet` here.
+   */
+  ETC: Object.freeze({
+    asset: 'ETC',
+    family: 'evm',
+    name: 'Ethereum Classic',
+    decimals: 18,
+    confirmations: 7500,
+    reorgAlarmDepth: 100,
+    chainId: Object.freeze({ mainnet: 61, testnet: 63 }),
+    // Both verified 200 on 2026-08-08 against a full-length hash path, and they differ, which is
+    // the property `explorers()` guards. Blockscout rather than a chain-agnostic aggregator
+    // because it serves both networks under one shape — the EMBER lesson is that a mainnet-only
+    // explorer with a hand-built testnet sibling is how a testnet hash reaches a mainnet page.
+    explorerTxUrl: explorers('https://etc.blockscout.com/tx/', 'https://etc-mordor.blockscout.com/tx/'),
+  }),
   // CONFIRMATIONS WERE RAISED FROM 3 TO 6 WHEN NATIVE DEPOSITS WERE BUILT, and the number is the
   // only one in this file that was ever a placeholder rather than a decision. Three is roughly
   // thirty minutes and is below what any custodian uses for Bitcoin; it was also, absurdly, twenty
@@ -280,6 +374,81 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
     confirmations: 12,
     reorgAlarmDepth: 6,
     explorerTxUrl: explorers('https://litecoinspace.org/tx/', 'https://litecoinspace.org/testnet/tx/'),
+  }),
+  /**
+   * Dogecoin. Litecoin's shape, Litecoin's RPC, and NOT Litecoin's depth.
+   *
+   * `family: 'bitcoin'` for the reasons the LTC comment above sets out and which were re-checked
+   * against that spec rather than assumed: Dogecoin Core answers the same bitcoind JSON-RPC the
+   * Bitcoin worker already speaks — `getblockchaininfo`, `getblockcount`, `getblockhash`,
+   * `getblock`, `getrawtransaction` — its transaction structure is Bitcoin's, and its addresses
+   * come off the node rather than being derived by the indexer. So the follower, the reorg repair
+   * and the UTXO extraction are reused.
+   *
+   * `docs/ecosystem/29-native-assets.md` §2 is blunt about what that does *not* buy, and it is
+   * worth repeating where the spec is rather than leaving it in a document: "the indexer's Bitcoin
+   * worker reads Esplora, and the Esplora ecosystem is thin-to-absent for Dogecoin … the dust
+   * thresholds differ, and Dogecoin's fee policy is a different animal from Bitcoin's. Call it
+   * **half an integration each**, not a configuration change." Nothing in this spec makes that
+   * false. What it does is fix the numbers that must not be decided twice.
+   *
+   * ── CONFIRMATIONS ARE 30, DERIVED FROM THE BLOCK TIME RATHER THAN COPIED FROM LTC ─────────────
+   *
+   * MEASURED 2026-08-08 over the 1,000 blocks below head 6,323,952 (BlockCypher's `/v1/doge/main`):
+   * 63,401 seconds, **a mean block time of 63.40s**. Litecoin's is ~2.5 minutes and it credits at
+   * 12, i.e. ~30 minutes; Bitcoin's is ~10 minutes and it credits at 6, i.e. ~60 minutes. Thirty
+   * blocks here is 30 × 63.40s ≈ **31.7 minutes**, which is Litecoin's wall clock and half
+   * Bitcoin's.
+   *
+   * Litecoin's 12 was the number to beware of, and copying it would have been the exact mistake
+   * the LTC comment names one paragraph up — "a depth is a property of a chain's security budget
+   * and block time, never of the software that follows it". Twelve Dogecoin blocks is **12.7
+   * minutes**, less than half the time the same estate insists on for Litecoin, on a chain whose
+   * blocks are individually four times cheaper to produce.
+   *
+   * Wall-clock parity with LTC is the argument and it deliberately stops there, because the
+   * security half does not point the same way in both directions and should not be quietly
+   * averaged in: Dogecoin has been merge-mined with Litecoin under AuxPoW since 2014, so its work
+   * is Litecoin's Scrypt work rather than a small independent budget — which is why 30 is not
+   * pushed higher — while a single Dogecoin block still commits a quarter of the work a Litecoin
+   * block does, which is why it is not pushed lower.
+   *
+   * `reorgAlarmDepth: 15` keeps LTC's relationship exactly: LTC alarms at 6 against 12, half the
+   * credit depth, so 30 gives 15. Half rather than a copied absolute, because what LTC's 6 encodes
+   * is a fraction of a credit depth and not a count of blocks.
+   *
+   * ── WHAT IS NOT HERE, AND IS NOT AN OVERSIGHT ─────────────────────────────────────────────────
+   *
+   * **Dogecoin has no bech32 and no segwit.** Addresses are base58: P2PKH at version byte `0x1e`
+   * (they begin with `D`) and P2SH at `0x16`. There is no HRP to give it, and if a consumer ever
+   * derives one for this asset by pattern-matching against LTC's `ltc1`/BTC's `bc1`, it will
+   * produce addresses that no Dogecoin node will ever pay to. **Its SLIP-0044 coin type is 3**
+   * (Bitcoin 0, Litecoin 2), so a derivation path built by incrementing LTC's lands on a different
+   * chain's keys.
+   *
+   * Neither fact is a field, because `ChainSpec` carries no address parameters at all: the LTC
+   * comment above records that address encoding "lives in custody and settlement as a network
+   * parameter table (different version bytes, a different bech32 HRP and a different WIF byte)",
+   * and that is still the right home for it. They are written here because this file is what a
+   * person reads when they add the asset, and because "no bech32" is a fact most easily encoded by
+   * omission — which is indistinguishable from having forgotten it unless somebody says so.
+   */
+  DOGE: Object.freeze({
+    asset: 'DOGE',
+    family: 'bitcoin',
+    name: 'Dogecoin',
+    decimals: 8,
+    confirmations: 30,
+    reorgAlarmDepth: 15,
+    // One provider serving BOTH networks, verified 200 on each on 2026-08-08. The obvious mainnet
+    // explorers — blockchair, dogechain.info, BlockCypher's — have no testnet sibling under a
+    // shape this prefix can carry, and `explorers()` would have accepted a mainnet URL beside a
+    // null while a person filled the null in later with whatever looked close. That is EMBER's
+    // defect written out longhand, so the pair is taken from one provider or not at all.
+    explorerTxUrl: explorers(
+      'https://blockexplorer.one/dogecoin/mainnet/tx/',
+      'https://blockexplorer.one/dogecoin/testnet/tx/',
+    ),
   }),
   SOL: Object.freeze({
     asset: 'SOL',
@@ -367,12 +536,53 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
  * So the order for the next asset is unchanged and now has a worked example: wire the follower,
  * the addresses and the sweep; add the price source and prove it against the live venues; then add
  * the member here, in a release that carries the ledger migration with it.
+ *
+ * ── DOGE AND ETC, 2026-08-08, AND THE ONE PLACE THE LIST ABOVE WAS INCOMPLETE ───────────────────
+ *
+ * The next asset turned out to be two, and they went through the four items above exactly as
+ * written. Item 2 was done FIRST and separately, which is the part that is a rule rather than an
+ * anecdote: `micro-pricing`'s venue maps carried `DOGE` and `ETC` — measured against all four live
+ * venues, not inferred — and merged on their own before this line was touched. That PR is inert on
+ * its own, because `quoted()` intersects the maps with `MARKET_ASSETS`, and `MARKET_ASSETS` is
+ * derived from this array. **It must be merged before this file reaches `main`, or `micro-pricing`
+ * goes red on a change it does not contain.**
+ *
+ * Two things were learned that the list above did not say, and both belong to it now.
+ *
+ *   5. **A PRICING FIXTURE IS PART OF THE PRICE SOURCE.** Widening the four symbol maps is not
+ *      sufficient. `pricing/src/sources.test.ts` drives every venue through a fake keyed by asset
+ *      and then asserts the answer's key set EQUALS `MARKET_ASSETS`; an asset that reaches this
+ *      array while absent from that fixture reads as `undefined`, is dropped by `collect`, and
+ *      fails the comparison. The symbol map makes the LIVE oracle safe and the fixture makes the
+ *      SUITE survive — they are two halves of item 2 and the second was invisible until now.
+ *   6. **THE UNION IS WIDENED HERE AND NOWHERE ELSE, SO THE PRICING PR CANNOT NAME ITS OWN
+ *      ASSETS.** `pricing`'s maps are `Partial<Record<AssetCode, …>>`. Writing `DOGE:` inside the
+ *      object literal is accepted (the literal passes through `Object.freeze`, which loses the
+ *      excess-property check), but `COINGECKO_IDS['DOGE']` is a TS7053 against a union that does
+ *      not yet contain it. So the earlier repository can carry the DATA but cannot yet TYPE it,
+ *      and its test says so in a comment rather than pretending otherwise. This is a property of
+ *      wiring-before-listing in general, not of these two assets.
+ *
+ * Item 3, `site`'s published count, re-derives itself from this array and needs no edit. Item 4,
+ * `sdk/tools/drift.ts`, now compares the SETS — so it will report DOGE and ETC as missing from the
+ * SDK's copy the moment this merges. That is the mechanism working, and it is step-2 work in
+ * `micro-sdk`, deliberately not done here: `sdk` is a public package that must not import a
+ * private one, and a copy that silently agreed would defeat the drift check that caught it.
+ *
+ * Item 1 — the follower, the addresses and the sweep — is NOT done for either asset, and this is
+ * the one place these two differ from LTC. They are listed here because the ledger can supervise a
+ * balance denominated in them and the oracle can price them, not because a deposit can arrive.
+ * `INDEXER_CHAINS` follows neither, so no DOGE or ETC deposit has ever been credited at any depth,
+ * which is exactly the window in which a confirmation depth is still a constant rather than a
+ * migration — see the ETC spec, which spends 7,500 blocks of latency inside it.
  */
 export const ON_CHAIN_ASSETS: readonly AssetCode[] = Object.freeze([
   'EMBER',
   'BTC',
   'ETH',
+  'ETC',
   'LTC',
+  'DOGE',
   'SOL',
   'XRP',
 ])
