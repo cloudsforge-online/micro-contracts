@@ -114,6 +114,20 @@ export const TOPIC_AUDIT = Object.freeze({
      * rotates.
      */
   },
+  'identity.password.reset_requested': {
+    audited: true,
+    subjectKind: 'user',
+    outcome: 'allowed',
+    /*
+     * Audited for the reason its sibling above is, and one more.
+     *
+     * Bounded volume: a reset is asked for rarely and per account, so this is not the sign-in
+     * problem. And it is the single strongest account-takeover signal the estate produces — "who
+     * asked to replace the credential on this account, and when" is where every dispute about a
+     * compromised account starts, and the event carries a live single-use credential. An operator
+     * who cannot answer that after the fact cannot tell a takeover from a forgetful user.
+     */
+  },
   'identity.user.deleted': { audited: true, subjectKind: 'user', outcome: 'allowed' },
   'identity.session.revoked': { audited: true, subjectKind: 'session', outcome: 'allowed' },
   'identity.mfa.added': { audited: true, subjectKind: 'user', outcome: 'allowed' },

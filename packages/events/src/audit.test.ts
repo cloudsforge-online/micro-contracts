@@ -14,7 +14,7 @@ import { AUDITED_TOPICS, TOPIC_AUDIT, auditRowFor } from './audit.ts'
 test('every registered topic has an audit decision, and every decision names a real topic', () => {
   const decided = Object.keys(TOPIC_AUDIT).sort()
   assert.deepEqual(decided, [...TOPIC_NAMES].sort())
-  assert.equal(decided.length, 61, 'the topic registry changed; every addition needs a decision')
+  assert.equal(decided.length, 62, 'the topic registry changed; every addition needs a decision')
 })
 
 /**
@@ -51,6 +51,7 @@ test('the inventory of audited topics is pinned — a widening is deliberate', (
     'identity.email.verification_requested',
     'identity.mfa.added',
     'identity.mfa.removed',
+    'identity.password.reset_requested',
     'identity.session.revoked',
     'identity.user.deleted',
     'identity.user.registered',
