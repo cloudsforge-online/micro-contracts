@@ -275,6 +275,29 @@ export const TOPICS = Object.freeze({
     description:
       'An account asked for its email address to be verified, carrying the single-use link to send.',
   }),
+  /**
+   * The sibling of the topic above, and registered for the same reason.
+   *
+   * It was emitted and consumed for its whole life without being registered: identity emits it at
+   * `identity/src/passwordReset.ts:362` and notify holds a rule for it at
+   * `notify/src/catalogue.ts:764`, and the two agreed only because two repositories independently
+   * guessed the same string. `org/tools/estate-topics.mjs` reported exactly that, and it is not a
+   * documentation complaint — `index.test.ts` pins that an unregistered topic fails
+   * `validateEnvelope`, and `activity/src/ingest.ts` files one as `unclassified` / `internal` with
+   * 90-day quarantine retention instead of the 730 days a security record gets. So the estate's
+   * account-recovery trail was being deleted early. micro-org#263.
+   *
+   * `keyedBy` is read off the emit site, not chosen here: identity keys it by the user, because
+   * ordering is per key and a later reset supersedes an earlier one.
+   */
+  'identity.password.reset_requested': Object.freeze({
+    producer: 'identity',
+    payloadType: 'PasswordResetRequested',
+    version: '1.0',
+    keyedBy: 'user_id',
+    description:
+      'A single-use password reset link has been minted for an account. Carries the address, and the link when one could be built — it expires in thirty minutes, works once, and is stripped back out of the outbox row once it has expired.',
+  }),
   'identity.user.deleted': Object.freeze({
     producer: 'identity',
     payloadType: 'UserDeleted',
