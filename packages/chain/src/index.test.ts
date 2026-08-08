@@ -43,6 +43,71 @@ test('the published confirmation depths are exactly what the estate promises', (
   // copied the number along with the code.
   assert.equal(CHAINS.LTC.confirmations, 12)
   assert.notEqual(CHAINS.LTC.confirmations, CHAINS.BTC.confirmations)
+  // Dogecoin's ~63.4s blocks (measured 2026-08-08 over 1,000 blocks) put 30 at ~31.7 minutes —
+  // Litecoin's wall clock, which is the argument. The `notEqual` is the same guard LTC carries
+  // against BTC and it is aimed at the same reflex: LTC's 12 here would be 12.7 minutes.
+  assert.equal(CHAINS.DOGE.confirmations, 30)
+  assert.notEqual(CHAINS.DOGE.confirmations, CHAINS.LTC.confirmations)
+  // ETC IS THE DEEPEST IN THE FILE BY THREE ORDERS OF MAGNITUDE AND THAT IS THE POINT. At ~13.70s
+  // blocks it is ~28.5 hours, chosen to clear the ~7,000-block reorg of 2020-08-29 rather than to
+  // feel proportionate. See the spec: the four recorded 51% attacks would each have retracted a
+  // deposit credited at ETH's 12, which is 2.7 minutes on this chain.
+  assert.equal(CHAINS.ETC.confirmations, 7500)
+  assert.ok(
+    CHAINS.ETC.confirmations > 7000,
+    'ETC credits shallower than a reorg it has actually suffered',
+  )
+  assert.notEqual(CHAINS.ETC.confirmations, CHAINS.ETH.confirmations)
+})
+
+test('a second EVM network is one asset code and one spec, and no new family', () => {
+  // `docs/ecosystem/29-native-assets.md` §2 decided this for BNB and it applies unchanged to ETC:
+  // `CHAINS` is a bijection from asset code to spec, so "another EVM network" is another row —
+  // never a `family`, and never a network dimension inside one spec.
+  assert.equal(CHAINS.ETC.family, 'evm')
+  assert.equal(CHAINS.ETC.family, CHAINS.ETH.family)
+  assert.equal(CHAINS.ETC.decimals, 18)
+  // Measured live on 2026-08-08: `eth_chainId` is 0x3d (61) on ETC mainnet and 0x3f (63) on Mordor,
+  // which is the surviving ETC testnet — Kotti (6) and Morden (62) are both retired.
+  assert.equal(CHAINS.ETC.chainId?.mainnet, 61)
+  assert.equal(CHAINS.ETC.chainId?.testnet, 63)
+  // Two EVM assets must never share a chain id pair: that is the same class of defect as one
+  // explorer serving two networks, and it would route an ETC transaction at an ETH node.
+  assert.notEqual(CHAINS.ETC.chainId?.mainnet, CHAINS.ETH.chainId?.mainnet)
+  assert.notEqual(CHAINS.ETC.chainId?.testnet, CHAINS.ETH.chainId?.testnet)
+})
+
+test('DOGE is Bitcoin-family with Bitcoin-family plumbing and none of Litecoin’s constants', () => {
+  assert.equal(CHAINS.DOGE.family, 'bitcoin')
+  assert.equal(CHAINS.DOGE.family, CHAINS.LTC.family)
+  assert.equal(CHAINS.DOGE.decimals, 8)
+  // No chain id, for the same reason Bitcoin and Litecoin have none: the network binding is in the
+  // WIF and in the node's own `getblockchaininfo.chain`, not in a number inside the transaction.
+  // A chain id appearing here would mean somebody had generalised from the EVM specs.
+  assert.equal(CHAINS.DOGE.chainId, undefined)
+  assert.equal(CHAINS.BTC.chainId, undefined)
+  assert.equal(CHAINS.LTC.chainId, undefined)
+})
+
+test('every asset that shares a family still gets its own depth — no family-wide constant', () => {
+  // The generalisation of the two `notEqual`s above, and the reason it is worth a test of its own:
+  // the estate now has three Bitcoin-family assets and two EVM ones, so "reuse the number with the
+  // code" has more places to happen than it did when LTC was the only instance. A family whose
+  // members all agree on a depth is not proof of a bug, but it is the signature of one, and the
+  // arithmetic differs per chain in every case here.
+  const byFamily = new Map<string, number[]>()
+  for (const spec of Object.values(CHAINS)) {
+    if (spec.confirmations === 0) continue // SHARD is retired and never touches a chain.
+    byFamily.set(spec.family, [...(byFamily.get(spec.family) ?? []), spec.confirmations])
+  }
+  for (const [family, depths] of byFamily) {
+    if (depths.length < 2) continue
+    assert.equal(
+      new Set(depths).size,
+      depths.length,
+      `two ${family} assets credit at the same depth; a depth belongs to a chain, not a family`,
+    )
+  }
 })
 
 test('every spec alarms on a reorg strictly shallower than the one it credits at', () => {
@@ -96,6 +161,51 @@ test('LTC IS NOW AN ASSET THE LEDGER HOLDS BALANCES IN — the half-step closed'
   assert.ok(ON_CHAIN_ASSETS.includes('LTC'))
 })
 
+test('DOGE AND ETC ARE ASSETS THE LEDGER MAY HOLD, AND THE PRICE LAYER MERGED FIRST', () => {
+  // The half-step LTC passed through is deliberately NOT repeated here: both go into `CHAINS` and
+  // into this list in one release, because the thing that made LTC's half-step useful — an indexer
+  // and a custody path that could work with the spec while the ledger stayed out — does not exist
+  // for either of these yet. `INDEXER_CHAINS` follows neither.
+  assert.equal(chainSpec('DOGE').name, 'Dogecoin')
+  assert.equal(chainSpec('ETC').name, 'Ethereum Classic')
+  assert.ok(ON_CHAIN_ASSETS.includes('DOGE'))
+  assert.ok(ON_CHAIN_ASSETS.includes('ETC'))
+
+  // AND THE ORDERING, WHICH IS THE PART THAT IS NOT LOCAL TO THIS REPOSITORY. `micro-pricing`
+  // derives `MARKET_ASSETS` from this array, so each name below became an asset its oracle claims
+  // to quote at the instant it was added. Both were wired and measured at all four venues in a PR
+  // that merged BEFORE this one — see the note above `ON_CHAIN_ASSETS`, items 2, 5 and 6. This
+  // assertion cannot check another repository; it is here so that the next person to widen the
+  // array reads the requirement while they are editing the line that triggers it.
+  assert.equal(ON_CHAIN_ASSETS.length, 8)
+
+  // Neither is retired and both may denominate something new — the property `assertIssuable`
+  // guards, asserted for the new members specifically because `RETIRED_ASSETS` is hand-written and
+  // a typo there is a silent, permanent refusal to credit.
+  assert.equal(isRetiredAsset('DOGE'), false)
+  assert.equal(isRetiredAsset('ETC'), false)
+})
+
+test('the two new alarm depths keep the relationships they were derived from', () => {
+  // DOGE takes LTC's RATIO rather than LTC's number: LTC alarms at half its credit depth (6 of
+  // 12), so 30 gives 15. What LTC's 6 encodes is a fraction, and copying it as an absolute would
+  // have put the alarm a fifth of the way down instead of halfway.
+  assert.equal(CHAINS.DOGE.reorgAlarmDepth, 15)
+  assert.equal(CHAINS.DOGE.reorgAlarmDepth * 2, CHAINS.DOGE.confirmations)
+  assert.equal(CHAINS.LTC.reorgAlarmDepth * 2, CHAINS.LTC.confirmations)
+
+  // ETC takes NEITHER a ratio nor an absolute, and that is the interesting one. A quarter of 7,500
+  // — ETH's ratio — is 1,875 blocks, which is over seven hours of a live 51% attack before anybody
+  // is paged. The alarm is anchored on the attack history from the shallow end instead: 100 blocks
+  // is the depth of the 2019 attack, ~23 minutes, far above ordinary one- and two-block noise and
+  // ~27 hours before anything could be wrongly credited.
+  assert.equal(CHAINS.ETC.reorgAlarmDepth, 100)
+  assert.ok(
+    CHAINS.ETC.reorgAlarmDepth * 4 < CHAINS.ETC.confirmations,
+    'the ETC alarm has drifted towards its credit depth, which is where it stops being a warning',
+  )
+})
+
 test('every member of ON_CHAIN_ASSETS is a chain this file actually knows the rules for', () => {
   // The generalisation of the test above, and the reason it can be inverted safely: the pairing of
   // "named in CHAINS" with "listed here" is now asserted for the whole set rather than for one
@@ -130,7 +240,17 @@ test('every on-chain asset has a spec, and the registry is frozen', () => {
 })
 
 test('an unknown asset throws rather than returning undefined', () => {
-  assert.throws(() => chainSpec('DOGE' as AssetCode), /unknown asset/)
+  // THIS TEST USED TO NAME `DOGE` AS THE UNKNOWN ASSET, AND IT WENT GREEN-FOR-THE-WRONG-REASON THE
+  // DAY DOGECOIN WAS ADDED — which is worth a comment, because it is a shape of rot that no
+  // failure would have reported. `chainSpec('DOGE')` stopped throwing and started returning the
+  // Dogecoin spec, so `assert.throws` was the thing that failed and the fix was visible. Had the
+  // assertion been written the other way round it would simply have stopped testing anything.
+  //
+  // The replacement is a code chosen so that it cannot be adopted: `NOTACHAIN` is not a ticker
+  // anybody could plausibly list. Picking a real coin's ticker for "the unknown one" is borrowing
+  // against the estate's own roadmap — `docs/ecosystem/29-native-assets.md` §8 has BNB, TRX and
+  // USDT-family assets queued, so ETH's neighbours are all candidates and none of them is safe.
+  assert.throws(() => chainSpec('NOTACHAIN' as AssetCode), /unknown asset/)
 })
 
 test('the reorg alarm sits below the credit depth, so shallow reorgs are not noise', () => {
