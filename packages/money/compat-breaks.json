@@ -1,0 +1,7 @@
+[
+  {
+    "path": "engagementAccount",
+    "acceptedIn": "1.1.0",
+    "reason": "the removed default was `assetCode: LedgerAssetCode = 'SHARD'`, and SHARD is retired (micro-org#227), so the additive form the gate asks for would be a second constructor whose only difference is that it still picks a denomination nothing issues. Every caller in the estate already passes an asset explicitly — worlds, emberkin, tessera, market and conformance all spell one — so this narrowing breaks no call site that exists; it breaks the call site nobody should write. Callers that relied on the default must now name the asset."
+  }
+]

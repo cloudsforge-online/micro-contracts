@@ -1,6 +1,6 @@
 {
   "name": "@cloudsforge/contracts-money",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Ledger accounts, journal entries, postings and balances.",
   "license": "MIT",
   "type": "module",
