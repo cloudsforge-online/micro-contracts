@@ -208,7 +208,12 @@ test('an engagement service name obeys the id rule — no separator, no key deli
 // The grant primitive — 21 §4/§5. These are the spellings three services must agree on, so they
 // are pinned here rather than trusted to three code reviews.
 test('an engagement grant debits the service treasury, spelled once for every service', () => {
-  assert.deepEqual(engagementAccount('market'), {
+  // Every call here names its asset, because the parameter no longer has a default. It used to
+  // default to 'SHARD', which meant these cases asserted the spelling of an account nobody in the
+  // test had chosen the denomination of — and 'SHARD' is retired. The values are unchanged: these
+  // are the accounts market and worlds really post against today, so the assertions still pin the
+  // live spelling rather than a tidier one.
+  assert.deepEqual(engagementAccount('market', 'SHARD'), {
     subject: 'engagement:market',
     assetCode: 'SHARD',
     purpose: 'treasury',
@@ -216,15 +221,18 @@ test('an engagement grant debits the service treasury, spelled once for every se
   })
   // `equity` is load-bearing: the ledger's overdraft trigger exempts `clearing` and `suspense`,
   // NOT `equity` — so an engagement account cannot be spent before it is funded.
-  assert.equal(engagementAccount('worlds').type, 'equity')
-  assert.equal(engagementAccount('worlds').purpose, 'treasury')
+  assert.equal(engagementAccount('worlds', 'SHARD').type, 'equity')
+  assert.equal(engagementAccount('worlds', 'SHARD').purpose, 'treasury')
   // The account key is (subject, assetCode, purpose), so a second spelling would be a second
   // account and would split one programme's ledger in half.
   assert.equal(
-    accountKey(engagementAccount('market')),
+    accountKey(engagementAccount('market', 'SHARD')),
     accountKey({ subject: 'engagement:market', assetCode: 'SHARD', purpose: 'treasury' }),
   )
-  assert.throws(() => engagementAccount('a:b'), RangeError)
+  // The asset does not change the subject, and a service granting in a live asset gets the same
+  // account grammar — micro-tessera passes 'EMBER' here today.
+  assert.equal(engagementAccount('tessera', 'EMBER').subject, 'engagement:tessera')
+  assert.throws(() => engagementAccount('a:b', 'SHARD'), RangeError)
 })
 
 test('the grant kind is one the LEDGER will actually accept', () => {
