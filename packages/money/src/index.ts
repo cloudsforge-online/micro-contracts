@@ -327,10 +327,19 @@ export interface EngagementAccountRef extends AccountIdentity {
  * overdraft-exempt (ledger/src/migrations.ts, `ledger_assert_no_overdraft`), so a service that
  * tries to grant more than its engagement account holds is refused by the ledger rather than
  * quietly going negative. An engagement account cannot be spent before it is funded.
+ *
+ * **`assetCode` is required, and was defaulted to `'SHARD'` until SHARD was retired.** A default
+ * asset on an account constructor is a decision made by omission: `engagementAccount('foo')`
+ * compiles, reads as complete, and silently picks the denomination of the programme's ledger — and
+ * once the picked asset is one nothing issues any more, the quiet answer is also the wrong one.
+ * Making it required moves that decision to the call site, where a reviewer can see which asset a
+ * service grants in. It stays `LedgerAssetCode` rather than `IssuableAssetCode`: the accounts
+ * holding retired assets still exist and still have to be addressable to be drained, so refusing
+ * to spell one would strand the balance rather than protect it.
  */
 export function engagementAccount(
   service: string,
-  assetCode: LedgerAssetCode = 'SHARD',
+  assetCode: LedgerAssetCode,
 ): EngagementAccountRef {
   return {
     subject: engagementSubject(service),
