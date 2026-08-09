@@ -10,6 +10,7 @@ import {
   SPARK_DECIMALS,
   WEI_PER_SPARK,
   assertIssuable,
+  blockSecondsIsAdvisory,
   chainSpec,
   coinAmountForShards,
   coinAmountForUsdCents,
@@ -141,6 +142,66 @@ test('every spec alarms on a reorg strictly shallower than the one it credits at
       `${spec.asset} alarms at ${spec.reorgAlarmDepth} but credits at ${spec.confirmations}`,
     )
   }
+})
+
+test('every asset carries a block time, and only an asset with no chain may carry none', () => {
+  // The point of putting `blockSeconds` on the spec rather than in a consumer's own table: `CHAINS`
+  // is `Readonly<Record<AssetCode, ChainSpec>>`, so an asset added to the union without a decision
+  // here does not compile. The table this replaced — `BLOCK_SECONDS` in hub-api/src/nextactions.ts
+  // — was a `Partial<Record<…>>`, which is the same shape with the compiler switched off: LTC, DOGE
+  // and ETC were all missing from it and nothing said so, the deposit card simply stopped printing
+  // how long the wait was. This test is that missing error, made explicit.
+  for (const spec of Object.values(CHAINS)) {
+    if (spec.blockSeconds === null) {
+      assert.ok(
+        isRetiredAsset(spec.asset),
+        `${spec.asset} has no block time but is still issuable; null means "there is no chain"`,
+      )
+      continue
+    }
+    assert.ok(
+      Number.isFinite(spec.blockSeconds) && spec.blockSeconds > 0,
+      `${spec.asset} has a block time of ${spec.blockSeconds}`,
+    )
+    // A units check, not a value check. Every figure in the registry is in SECONDS; the failure
+    // this catches is somebody pasting a chain's own constant in milliseconds — Solana publishes
+    // `DEFAULT_MS_PER_SLOT`, Ethereum publishes `SLOT_DURATION_MS` — which would read as an hour
+    // per slot and produce a deposit estimate in months.
+    assert.ok(
+      spec.blockSeconds >= 0.1 && spec.blockSeconds <= 3600,
+      `${spec.asset}'s block time of ${spec.blockSeconds} is not plausibly a number of seconds`,
+    )
+  }
+})
+
+test('the longest wait in the estate is ETC, which is the asset that had no block time at all', () => {
+  // The defect this field was added for, stated as arithmetic. ETC credits at 7,500 confirmations —
+  // an anti-reorg depth, not a caution — so its deposit takes over a day, and it was one of the
+  // three assets absent from the consumer's hand-typed table. The asset with the longest wait was
+  // the asset whose wait could not be displayed.
+  const waits = Object.values(CHAINS)
+    .filter((spec) => spec.blockSeconds !== null && spec.confirmations > 0)
+    .map((spec) => ({ asset: spec.asset, seconds: spec.confirmations * (spec.blockSeconds ?? 0) }))
+    .sort((a, b) => b.seconds - a.seconds)
+
+  assert.equal(waits[0]?.asset, 'ETC')
+  assert.ok(
+    (waits[0]?.seconds ?? 0) > 24 * 60 * 60,
+    'ETC is meant to be the day-long one; if it is not, the depth changed and this is the wrong test',
+  )
+})
+
+test('BLOCK TIME IS NOT A DEPTH — nothing may credit against it', () => {
+  // `blockSecondsIsAdvisory` is a flag a reader trips over, not a switch. The property that makes
+  // it true is asserted instead: `isConfirmed` takes a COUNT OF BLOCKS and answers from
+  // `confirmations` alone, so no elapsed time — real or estimated — can move it.
+  assert.equal(blockSecondsIsAdvisory, true)
+  assert.equal(isConfirmed('ETC', 7499), false)
+  assert.equal(isConfirmed('ETC', 7500), true)
+  // And the same at a wall-clock time far past any estimate this field could produce: the answer
+  // still comes from the count, because the count is the only argument there is.
+  assert.equal(isConfirmed('DOGE', 29), false)
+  assert.equal(isConfirmed('DOGE', 30), true)
 })
 
 test('LTC is Bitcoin-family, so the Bitcoin worker and the PSBT pin apply to it unchanged', () => {

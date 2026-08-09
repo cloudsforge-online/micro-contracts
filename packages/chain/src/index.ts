@@ -179,7 +179,57 @@ export interface ChainSpec {
   readonly chainId?: Readonly<Record<Network, number>>
   /** Built by `explorers()`, which is the only thing that can build one. */
   readonly explorerTxUrl: ExplorerTxUrls
+  /**
+   * How long one block (or ledger, or slot) takes, in seconds. `null` for an asset with no chain.
+   *
+   * ── WHY THIS IS HERE WHEN THE HEADER SAYS NOTHING THAT MOVES MONEY MAY DEPEND ON A BLOCK TIME ──
+   *
+   * It is still true that nothing may. This field is **display-only** and the rest of this file is
+   * arranged so that it cannot become anything else: no function here reads it, `isConfirmed` still
+   * answers from `confirmations` alone, and a wrong value costs an estimate on a card and nothing
+   * else. Read `blockSecondsIsAdvisory` below before using it for anything.
+   *
+   * What it replaces is worse than what it risks. `hub-api/src/nextactions.ts` carried a private
+   * `BLOCK_SECONDS` map typed `Partial<Record<AssetCode, number>>` to turn "41/60 confirmations"
+   * into "~5 min" on the deposit card. Being partial, it had rows for EMBER, ETH, BTC, SOL and XRP
+   * and none for LTC, DOGE or ETC — and a missing row is `undefined`, so the estimate silently
+   * became `null` and the card simply stopped saying how long. That degradation is honest but it
+   * lands hardest exactly where it is least affordable: **ETC credits at 7,500 blocks**, so the one
+   * asset in this file whose deposit takes over a day was also the one the screen refused to put a
+   * time against.
+   *
+   * The general form of that defect is the reason for a field rather than a fourth copy of the
+   * table. `CHAINS` is `Readonly<Record<AssetCode, ChainSpec>>` and therefore TOTAL, so a new asset
+   * added to the union cannot compile without a decision here — where the other numbers about the
+   * chain already are, next to the depth they will be multiplied by.
+   *
+   * ── TARGETS AND MEASUREMENTS ARE BOTH USED, AND WHICH ONE IS NOT A STYLE CHOICE ────────────────
+   *
+   * A chain that ENFORCES a spacing gets its enforced figure, because a mean sampled from it is a
+   * measurement of the retarget's error rather than of the chain. A chain that does not gets a
+   * dated measurement. Each row below says which it is and where it came from, and every citation
+   * was re-read or re-run on 2026-08-09 rather than copied from this file's own prose.
+   */
+  readonly blockSeconds: number | null
 }
+
+/**
+ * **`blockSeconds` IS ADVISORY. NOTHING MAY CREDIT, RELEASE, EXPIRE OR RECONCILE AGAINST IT.**
+ *
+ * Named as a constant so that the rule has somewhere to be imported from and asserted about, rather
+ * than living only in a comment on a field that a future reader meets through autocomplete.
+ *
+ * The rule is the header's, restated for the one field it applies to: `confirmations` is a contract
+ * that `wallet`, `settlement`, `custody` and `indexer` agree on byte-for-byte, and a skew in it is
+ * money credited at the wrong depth. `blockSeconds` is an estimate of wall-clock time, it drifts
+ * with hashrate on every proof-of-work chain here, and a deposit that became creditable because
+ * enough SECONDS had passed would be a deposit credited without the chain's agreement. `isConfirmed`
+ * takes a block count and will keep taking one.
+ *
+ * What it is for: telling a user roughly how long they are waiting, beside a confirmation count
+ * that remains the authoritative figure.
+ */
+export const blockSecondsIsAdvisory = true as const
 
 /**
  * The supported chains.
@@ -196,6 +246,13 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
     decimals: 18,
     confirmations: 60,
     reorgAlarmDepth: 5,
+    // TARGET, from `hearth/README.md` — "Block time: 15 seconds" — and the figure Hearth's LWMA
+    // retarget aims at. Deliberately NOT measured, even though mainnet is reachable and a mean
+    // could be taken: `network-site/src/content/facts.ts` already ruled on this exact number and
+    // the ruling holds here — "a measurement is a runtime figure and belongs to the chain index".
+    // The consequence to know when reading an estimate built from it: Hearth is young, so the
+    // observed spacing runs LONGER than the target and this number flatters the wait.
+    blockSeconds: 15,
     chainId: Object.freeze({ mainnet: 7411, testnet: 7412 }),
     // The two environments run side by side on one host under one apex: mainnet at
     // `cloudsforge.online`, testnet under the SINGLE-LABEL suffix `-testnet.cloudsforge.online`.
@@ -228,6 +285,12 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
     decimals: 18,
     confirmations: 12,
     reorgAlarmDepth: 3,
+    // ENFORCED, not measured. Post-Merge Ethereum has a fixed slot clock:
+    // `ethereum/consensus-specs`, `configs/mainnet.yaml`, read at `master` on 2026-08-09, carries
+    // `SLOT_DURATION_MS: 12000`. Missed slots make the observed MEAN a little above 12, which is
+    // why the enforced figure is the honest one to publish — sampling it would measure how often
+    // proposers are offline, not how long a block takes.
+    blockSeconds: 12,
     chainId: Object.freeze({ mainnet: 1, testnet: 11155111 }),
     explorerTxUrl: explorers('https://etherscan.io/tx/', 'https://sepolia.etherscan.io/tx/'),
   }),
@@ -318,6 +381,17 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
     decimals: 18,
     confirmations: 7500,
     reorgAlarmDepth: 100,
+    // MEASURED, because ETC enforces no spacing — it is Ethash with a difficulty adjustment and no
+    // slot clock, so there is no target to quote. Re-run 2026-08-09 against `https://etc.rivet.link`
+    // (the same endpoint the depth above was derived from): blocks 25,102,520 → 25,112,520 spanned
+    // 134,835 seconds, a mean of 13.4835s. The spec above records 13.70s from 2026-08-08; the two
+    // agree to within 2%, which is the drift a proof-of-work chain has by construction and the
+    // reason this field is advisory. Rounded to 13.5 rather than carried to four places, because
+    // the digits past that are noise and publishing them would imply a precision nobody has.
+    //
+    // 7,500 × 13.5s ≈ 28.1 hours, which is what the depth above costs a depositor — and the number
+    // that used to have nowhere to be displayed from.
+    blockSeconds: 13.5,
     chainId: Object.freeze({ mainnet: 61, testnet: 63 }),
     // Both verified 200 on 2026-08-08 against a full-length hash path, and they differ, which is
     // the property `explorers()` guards. Blockscout rather than a chain-agnostic aggregator
@@ -346,6 +420,11 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
     // Still strictly below `confirmations`, which is the property the estate relies on: a reorg deep
     // enough to retract a CREDITED movement is always deep enough to have halted the chain first.
     reorgAlarmDepth: 2,
+    // ENFORCED. `bitcoin/bitcoin`, `src/kernel/chainparams.cpp`, read at `master` on 2026-08-09:
+    // `consensus.nPowTargetSpacing = 10 * 60`. The difficulty retarget exists to hold this, so it
+    // is the figure to publish; a short sample says nothing, and one taken on 2026-08-09 over the
+    // last 14 blocks came out at 395s, which is Poisson noise rather than a faster Bitcoin.
+    blockSeconds: 600,
     explorerTxUrl: explorers('https://mempool.space/tx/', 'https://mempool.space/testnet/tx/'),
   }),
   /**
@@ -373,6 +452,11 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
     decimals: 8,
     confirmations: 12,
     reorgAlarmDepth: 6,
+    // ENFORCED. `litecoin-project/litecoin`, `src/chainparams.cpp`, read at `master` on 2026-08-09:
+    // `consensus.nPowTargetSpacing = 2.5 * 60`. This is the number the depth above was argued from
+    // — "twelve is ~30 minutes" — so it now sits beside it instead of only in the prose, and 12 ×
+    // 150s = 1,800s is that claim as arithmetic rather than as a sentence.
+    blockSeconds: 150,
     explorerTxUrl: explorers('https://litecoinspace.org/tx/', 'https://litecoinspace.org/testnet/tx/'),
   }),
   /**
@@ -449,6 +533,16 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
       'https://blockexplorer.one/dogecoin/mainnet/tx/',
       'https://blockexplorer.one/dogecoin/testnet/tx/',
     ),
+    // MEASURED, and the only row where the measurement and the chain's own target disagree enough
+    // to matter. `dogecoin/dogecoin`, `src/chainparams.cpp`, read at `master` on 2026-08-09, says
+    // `consensus.nPowTargetSpacing = 60; // 1 minute`. Blocks arrive slower than that: over blocks
+    // 6,323,657 → 6,324,657 (BlockCypher `/v1/doge/main`, 2026-08-09) 1,000 blocks spanned 63,298
+    // seconds, a mean of 63.298s, ~5.5% above target. That is what a chain whose difficulty is
+    // retargeted per block looks like when merge-mined hashrate is drifting rather than steady, and
+    // it is the number a depositor experiences: 30 × 63.3s ≈ 32 minutes, against the 30 minutes the
+    // target would promise. The published figure is the measured one for the same reason the ETC
+    // row above uses a measurement — the estimate exists to predict a wait, not to quote a policy.
+    blockSeconds: 63.3,
   }),
   SOL: Object.freeze({
     asset: 'SOL',
@@ -464,6 +558,16 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
     // this field being a prefix that `explorerTxUrl()` concatenates a hash onto. Null costs the
     // link; the old value spent it on the wrong cluster.
     explorerTxUrl: explorers('https://solscan.io/tx/', null),
+    // ENFORCED, and the one row where "block" means slot. `solana-labs/solana`,
+    // `sdk/program/src/clock.rs`, read at `master` on 2026-08-09: `DEFAULT_MS_PER_SLOT` is derived
+    // from `DEFAULT_TICKS_PER_SLOT` and `DEFAULT_TICKS_PER_SECOND` and pinned by
+    // `const_assert_eq!(DEFAULT_MS_PER_SLOT, 400)`. A 2026-08-09 sample over 100,000 slots gave
+    // 0.42159s — slots are SKIPPED when a leader misses, so wall-clock always runs above the
+    // constant — but the skip rate is a network-health figure that moves week to week, and pinning
+    // a display estimate to it would make this file drift. `confirmations: 32` above counts slots,
+    // so 32 × 0.4s ≈ 13s is the estimate; the real wait is nearer 14s, which is inside the rounding
+    // a "minutes" display does anyway.
+    blockSeconds: 0.4,
   }),
   XRP: Object.freeze({
     asset: 'XRP',
@@ -476,6 +580,14 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
       'https://livenet.xrpl.org/transactions/',
       'https://testnet.xrpl.org/transactions/',
     ),
+    // MEASURED, because the XRP Ledger enforces no close interval at all: a ledger closes when the
+    // validators agree one has, so there is no constant in `XRPLF/rippled` to cite the way BTC and
+    // LTC have one. Over ledgers 106,173,077 → 106,174,077 (`xrplcluster.com`, 2026-08-09) 1,000
+    // ledgers spanned 3,880 seconds, a mean of 3.88s, published as 3.9. `confirmations: 1` above
+    // means this is the whole wait — the only row where `blockSeconds` and the user's wait are the
+    // same number — and the ledger is final on close, so the estimate does not decay into a lie the
+    // way it would on a probabilistic chain.
+    blockSeconds: 3.9,
   }),
   // RETIRED — `RETIRED_ASSETS`. The spec stays because the ledger still supervises 114 live SHARD
   // accounts and `chainSpec('SHARD')` must keep answering for them; `decimals: 0` in particular is
@@ -490,6 +602,12 @@ export const CHAINS: Readonly<Record<AssetCode, ChainSpec>> = Object.freeze({
     confirmations: 0,
     reorgAlarmDepth: 0,
     explorerTxUrl: explorers(null, null),
+    // `null`, not `0`, and the distinction is the reason the field is nullable. SHARD never touched
+    // a chain, so there is no block and no source to cite; `0` would be a number, and a number here
+    // multiplies by a remaining depth to produce "0 minutes" — an estimate that reads as "any
+    // moment now" for a thing that will never arrive. `null` makes a consumer say nothing instead,
+    // which is what `hub-api`'s deposit card does with it.
+    blockSeconds: null,
   }),
 })
 
