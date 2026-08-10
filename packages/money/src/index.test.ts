@@ -23,6 +23,7 @@ import {
   computeDrift,
   ENGAGEMENT_GRANT_KIND,
   ENGAGEMENT_TREASURY,
+  EXCHANGE,
   engagementAccount,
   engagementSubject,
   formatMoney,
@@ -249,6 +250,20 @@ test('a chain clearing subject parses — the spelling foresight fee reports alr
   assert.equal(isAccountSubject('chain:ember'), true)
   assert.throws(() => chainSubject('a:b'), RangeError)
   assert.equal(isAccountSubject('chain:'), false)
+})
+
+// micro-org#372. The literal is asserted, not just the constant: micro-trade wrote `'exchange'`
+// by hand in `transferPostings` and the wire type for a subject is `string`, so nothing in the
+// compiler stood between that spelling and a RangeError at the ledger's `ensureAccount`. What has
+// to hold is that the STRING parses — a test that only exercised `EXCHANGE` would still pass if
+// the constant were renamed to something trade does not write.
+test('the exchange omnibus escrow parses — the spelling micro-trade already writes', () => {
+  assert.equal(EXCHANGE, 'exchange')
+  assert.deepEqual(parseAccountSubject('exchange'), { kind: 'exchange' })
+  assert.equal(isAccountSubject('exchange'), true)
+  // A singleton, so a prefixed form is not another exchange — it is nothing.
+  assert.equal(isAccountSubject('exchange:trade'), false)
+  assert.throws(() => parseAccountSubject('exchange:trade'), RangeError)
 })
 
 // ---------------------------------------------------------------------------
