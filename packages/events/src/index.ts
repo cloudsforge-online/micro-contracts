@@ -822,8 +822,14 @@ export const TOPICS = Object.freeze({
     // a season is funded from `engagement:worlds`, docs/ecosystem/21 §2 denominates that treasury
     // in EMBER, and SHARD has been retired since 2026-08-04 — so the old description named an
     // asset the payload could no longer be carrying. The payload now names the asset itself,
-    // which is what `activity` refuses to quantify a reward without. `version` is unchanged
-    // because a description is not a contract; the payload's own rename is the producer's break.
+    // which is what `activity` refuses to quantify a reward without. The topic `version` is
+    // unchanged: the payload's own rename is the producer's break and it travels in micro-worlds.
+    //
+    // `TOPICS` is `as const`, so every description is a string LITERAL in the exported surface and
+    // editing one reads to `tools/compat.ts` as `type-changed` — the additive form it asks for
+    // does not exist for a field a topic has exactly one of. Taken as a recorded break instead:
+    // `compat-breaks.json` beside this package's manifest, against version 1.1.0. That waiver
+    // expires the moment the version moves on and must be pruned by the commit after this one.
     description:
       'A season reward paid a player in EMBER wei, with the asset code, the journal entry and the remaining budget on the event so a nearly-spent alert can be a subscriber rather than a remembered query.',
   }),
