@@ -818,8 +818,14 @@ export const TOPICS = Object.freeze({
     payloadType: 'RewardGranted',
     version: '1.0',
     keyedBy: 'reward_id',
+    // 'in Shards' until 2026-08-10. micro-worlds moved this programme onto EMBER (micro-org#226):
+    // a season is funded from `engagement:worlds`, docs/ecosystem/21 §2 denominates that treasury
+    // in EMBER, and SHARD has been retired since 2026-08-04 — so the old description named an
+    // asset the payload could no longer be carrying. The payload now names the asset itself,
+    // which is what `activity` refuses to quantify a reward without. `version` is unchanged
+    // because a description is not a contract; the payload's own rename is the producer's break.
     description:
-      'A season reward paid a player in Shards, with the journal entry and the remaining budget on the event so a nearly-spent alert can be a subscriber rather than a remembered query.',
+      'A season reward paid a player in EMBER wei, with the asset code, the journal entry and the remaining budget on the event so a nearly-spent alert can be a subscriber rather than a remembered query.',
   }),
   'worlds.provision.completed': Object.freeze({
     producer: 'worlds',
