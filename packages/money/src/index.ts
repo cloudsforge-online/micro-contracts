@@ -196,9 +196,9 @@ export function assetDecimals(assetCode: LedgerAssetCode, tokenDecimals?: number
 /**
  * Who an account belongs to.
  *
- * `platform`, `custody` and `clearing` are singletons: there is one platform, one custody
- * position per asset and one clearing position per asset, and each is distinguished from the
- * others only by `(assetCode, purpose)`.
+ * `platform`, `custody`, `clearing` and `exchange` are singletons: there is one platform, one
+ * custody position per asset, one clearing position per asset and one exchange escrow per asset,
+ * and each is distinguished from the others only by `(assetCode, purpose)`.
  */
 export type AccountSubject =
   | `user:${string}`
@@ -207,6 +207,7 @@ export type AccountSubject =
   | 'platform'
   | 'custody'
   | 'clearing'
+  | 'exchange'
   | 'platform:engagement-treasury'
   | `engagement:${string}`
   | `chain:${string}`
@@ -218,6 +219,7 @@ export type ParsedSubject =
   | { readonly kind: 'platform' }
   | { readonly kind: 'custody' }
   | { readonly kind: 'clearing' }
+  | { readonly kind: 'exchange' }
   | { readonly kind: 'engagement-treasury' }
   | { readonly kind: 'engagement'; readonly service: string }
   | { readonly kind: 'chain'; readonly id: string }
@@ -225,6 +227,29 @@ export type ParsedSubject =
 export const PLATFORM: AccountSubject = 'platform'
 export const CUSTODY: AccountSubject = 'custody'
 export const CLEARING: AccountSubject = 'clearing'
+
+/**
+ * The exchange's omnibus escrow — the balance the order book holds while an order rests, with
+ * `micro-trade`'s `exchange_accounts` rows as the sub-ledger that says whose it is.
+ *
+ * `micro-trade` has spelled this subject by hand since the order book shipped
+ * (`trade/src/transfers.ts`, `transferPostings`), and the grammar did not have it, so every
+ * posting it made would have died at `parseAccountSubject` inside the ledger's `ensureAccount` —
+ * the same way foresight's `chain:` entries died before `chainSubject` was registered below.
+ * Nothing had noticed because the feature is off behind `TRADE_EXCHANGE_ENABLED`, and the wire
+ * type for a subject is `string`, so TypeScript had nothing to object to. micro-org#372.
+ *
+ * A singleton for the same reason `custody` is: there is one escrow pool per asset, and which
+ * customer it is held for is the sub-ledger's question, not the subject's.
+ *
+ * It is used at purpose `escrow`, type **`liability`** — the money is owed onwards, and it must
+ * NOT be overdraft-exempt, which is what rules out `clearing`. That the reconciliation invariant
+ * survives it is not an assumption: `ledger/src/reconcile.ts`'s `totalFor(tx, 'liability', asset)`
+ * filters on the account TYPE and passes no subject, so a balance moving from
+ * `user:<id>/available/liability` into this account leaves Σ liabilities — the half of the
+ * invariant that is compared against Σ custody assets — exactly where it was.
+ */
+export const EXCHANGE: AccountSubject = 'exchange'
 
 /**
  * The engagement treasury — docs/ecosystem/21 §4, spelled exactly as that document's tree spells
@@ -238,7 +263,7 @@ export const CLEARING: AccountSubject = 'clearing'
  */
 export const ENGAGEMENT_TREASURY: AccountSubject = 'platform:engagement-treasury'
 
-const SINGLETON_SUBJECTS = ['platform', 'custody', 'clearing'] as const
+const SINGLETON_SUBJECTS = ['platform', 'custody', 'clearing', 'exchange'] as const
 
 /**
  * The delimiter used by the canonical account key.
