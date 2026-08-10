@@ -1,7 +1,0 @@
-[
-  {
-    "path": "TOPICS.worlds.reward.granted.description",
-    "acceptedIn": "1.1.0",
-    "reason": "the description said this topic pays a player 'in Shards', and SHARD was retired on 2026-08-04 (micro-org#226, micro-org#227) — micro-worlds now funds a season from engagement:worlds and emits EMBER wei with an assetCode on the payload. TOPICS is `as const`, so a description is a string literal in the exported surface and any correction reads as `type-changed`; the additive form the gate asks for cannot exist for a field a topic has exactly one of, and the alternative is a registry that describes the payload in an asset nothing can issue. No consumer can depend on the literal in practice — `topicSpec()` returns `TopicSpec`, whose `description` is `string`. Consumers need do nothing."
-  }
-]
