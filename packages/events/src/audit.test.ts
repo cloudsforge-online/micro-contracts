@@ -14,7 +14,7 @@ import { AUDITED_TOPICS, TOPIC_AUDIT, auditRowFor } from './audit.ts'
 test('every registered topic has an audit decision, and every decision names a real topic', () => {
   const decided = Object.keys(TOPIC_AUDIT).sort()
   assert.deepEqual(decided, [...TOPIC_NAMES].sort())
-  assert.equal(decided.length, 63, 'the topic registry changed; every addition needs a decision')
+  assert.equal(decided.length, 69, 'the topic registry changed; every addition needs a decision')
 })
 
 /**
@@ -70,6 +70,18 @@ test('the inventory of audited topics is pinned — a widening is deliberate', (
     // acting with authority over a user's property, which is exactly what this log holds. The
     // other six are simulation and say so at the length of a decision.
     'tessera.object.anchored',
+    // micro-org#345. Four of trade's six new topics, plus the start that reserves the capital they
+    // then spend, and the widening IS deliberate: `trade.bot.paused` promised in the future tense
+    // that when the money-moving trade topics were registered the answer would be yes. Two of the
+    // seven stay out — creating a bot and pausing one — because neither posts to the ledger, and
+    // both say so at the length of a decision. `trade.fee.settled` is the one to read first: it is
+    // the platform charging a customer on its own initiative, which is the strongest case in this
+    // inventory for a row an operator can produce afterwards.
+    'trade.bot.started',
+    'trade.fee.settled',
+    'trade.fill.settled',
+    'trade.order.filled',
+    'trade.transfer.settled',
     'wallet.deposit.confirmed',
     // micro-org#200. Audited for the same reason its sibling above is — it is a fact about a
     // customer's money — and it is the only entry in this inventory that records money the estate

@@ -950,6 +950,116 @@ export const TOPICS = Object.freeze({
   }),
 
   /* ---------------------------------------------------------------------------------------------
+   * TRADE — the OTHER SIX. micro-org#345, and the completion of the block above.
+   *
+   * `trade.bot.paused` was adopted alone. `micro-trade` emits seven topics, so for the whole life
+   * of that entry six of them had no name here — and the cost of a missing name is larger than the
+   * missing timeline entry it is usually described by. Three things were true at once while these
+   * six were unregistered, and only the first is the one people talk about:
+   *
+   *   1. `activity` filed all six as `unclassified` — no feed entry for a bot a user started, a
+   *      fill they were charged for, or a fee taken from their account — and `notify` had no rule.
+   *   2. Because `unclassified` is the QUARANTINE retention class, those rows expired at 90 days
+   *      rather than at the 1825 a financial record gets (`activity/src/retention.ts`). Four of the
+   *      six move money. The estate was deleting its own trading record early, in a repository
+   *      neither the producer nor the registry had any reason to look at — the same shape as the
+   *      `identity.password.reset_requested` finding, which `notify/src/topics.ts` records.
+   *   3. **`collectEnvelopeDefects` cannot check producer ownership without a `TopicSpec`.** Read
+   *      it: the `producer !== spec.producer` branch is reachable only when `spec` is defined, and
+   *      `spec` is defined only for a REGISTERED topic. So an envelope claiming
+   *      `topic: 'trade.fee.settled'` with `producer: 'wallet'` classified as `unregistered_topic`
+   *      with an EMPTY `defects` — the excused branch — and `activity/src/ingest.ts` shelved it.
+   *      Measured 2026-08-10 against this file on main, before this block existed:
+   *
+   *          classifyEnvelope({ topic: 'trade.fee.settled',  producer: 'wallet', ... })
+   *            → { reason: 'unregistered_topic', defects: [] }              // shelved
+   *          classifyEnvelope({ topic: 'trade.bot.paused',   producer: 'wallet', ... })
+   *            → { reason: 'malformed', defects: ['producer: "wallet" does not own topic …'] }
+   *
+   *      One character of difference in the topic, and the difference between a service publishing
+   *      under another's namespace being refused and being filed. `ingest.ts` names this exactly —
+   *      "that check arrives with the registration, and only with it" — so registering these six is
+   *      not only what lets them be read, it is what lets them be REFUSED when they are forged.
+   *
+   * Every spec below is pasted from `trade/src/topics.ts` `AWAITING_REGISTRATION`, field for field,
+   * because a spec the producer wrote is the thing being adopted and a second draft of it here
+   * would be two repositories proposing two contracts for one topic.
+   *
+   * `keyedBy` was re-read off the emit site rather than trusted from the spec — the `custody`
+   * lesson recorded above, where both ceremony topics were registered `keyedBy: 'user_id'` while
+   * the emit sites passed the ADDRESS and every export event was filed against a user who does not
+   * exist. Verified in `micro-trade`: `bots.ts` passes `bot.id` on both bot topics, `fills.ts`
+   * passes `value.fill.id`, `fees.ts` passes the settlement `row.id`, `exchange.ts` passes
+   * `order.id` (the TAKER's, which is what `trade/src/topics.ts` argues for at length), and
+   * `transfers.ts` passes `transfer.id`. All six match.
+   *
+   * One payload shape each, which is the `identity.mfa.changed` test — a name carrying a
+   * discriminator over several shapes is unregisterable by construction, because a `TopicSpec`
+   * gives a topic exactly one `payloadType`. Each of the six has exactly one emit site.
+   *
+   * The last two belong to the order book, behind `TRADE_EXCHANGE_ENABLED`. They are registered
+   * anyway rather than held back, for the reason `micro-trade` gives: the moment the flag is turned
+   * on is the worst possible moment to discover that the estate cannot read the events.
+   *
+   * Landing this makes `adoptedProposals()` non-empty in `micro-trade`, whose suite fails until the
+   * six quarantine entries are deleted. That is the self-emptying quarantine working, not a
+   * regression this commit introduced. It also requires `activity` to hold six classifiers and
+   * `notify` a rule or a recorded reason for each, both of which are typecheck- and test-enforced
+   * in those repositories — which is why this could never have been a one-repository change.
+   * ------------------------------------------------------------------------------------------ */
+  'trade.bot.created': Object.freeze({
+    producer: 'trade',
+    payloadType: 'BotCreated',
+    version: '1.0',
+    keyedBy: 'bot_id',
+    description: 'A trading bot was configured, with its mode, strategy and allocation.',
+  }),
+  'trade.bot.started': Object.freeze({
+    producer: 'trade',
+    payloadType: 'BotStarted',
+    version: '1.0',
+    keyedBy: 'bot_id',
+    description: 'A bot began trading and its allocation was reserved through the ledger.',
+  }),
+  'trade.fill.settled': Object.freeze({
+    producer: 'trade',
+    payloadType: 'FillSettled',
+    version: '1.0',
+    // Keyed by the FILL and not by the bot, and `trade/src/topics.ts` argues it: two fills for one
+    // bot have no ordering relationship to each other, and keying by the bot would serialise a bot
+    // behind its own history.
+    keyedBy: 'fill_id',
+    description: 'A bot fill settled against the ledger, with its journal entry.',
+  }),
+  'trade.fee.settled': Object.freeze({
+    producer: 'trade',
+    payloadType: 'FeeSettled',
+    version: '1.0',
+    keyedBy: 'settlement_id',
+    description: 'A performance fee settlement completed for a bot period, with its entry.',
+  }),
+  'trade.order.filled': Object.freeze({
+    producer: 'trade',
+    payloadType: 'OrderFilled',
+    version: '1.0',
+    // The TAKER's order, not the user and not the trade. One order can fill against many makers in
+    // one pass, so a per-trade topic would print an unbounded burst for a single customer action;
+    // the order is the aggregate a consumer follows.
+    keyedBy: 'order_id',
+    description:
+      'An exchange order filled, wholly or partly, with the quantity and notional it traded.',
+  }),
+  'trade.transfer.settled': Object.freeze({
+    producer: 'trade',
+    payloadType: 'TransferSettled',
+    version: '1.0',
+    // The idempotency subject: one transfer, one journal entry, one event.
+    keyedBy: 'transfer_id',
+    description:
+      'A deposit into or withdrawal out of an exchange balance settled against the ledger.',
+  }),
+
+  /* ---------------------------------------------------------------------------------------------
    * TESSERA — 23-tessera.md §11.2. Seven topics, registered in the same commit as the code that
    * emits them, which is the rule the two paragraphs above exist because nobody followed.
    *
