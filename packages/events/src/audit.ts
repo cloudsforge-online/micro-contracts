@@ -299,20 +299,71 @@ export const TOPIC_AUDIT = Object.freeze({
   // question asked after every leaked-key incident.
   'devplatform.key.revoked': { audited: true, subjectKind: 'api_key', outcome: 'allowed' },
 
-  /* ---------------------------------------------------------------- automated trading */
+  /* ----------------------------------------------------------------- automated trading
+   *
+   * SEVEN topics now, and this block used to hold one. The entry below promised that when
+   * `trade.fill.settled` and `trade.fee.settled` were registered "this table will demand a
+   * decision about it, and that decision should be yes". micro-org#345 registered them and four
+   * others; the promise is kept literally — the four that move money are audited, and the two that
+   * do not each say why at the length of a decision.
+   *
+   * The dividing line inside `trade` is NOT "is it about trading". It is the same line as
+   * everywhere else in this table: **does an operator have to be able to reconstruct, afterwards,
+   * where a customer's money went.** `bot.created` and `bot.paused` are a user arranging their own
+   * automation and no posting is made on either; `bot.started` is where the platform reserves the
+   * capital through the ledger, and from there every one of the remaining four carries a journal
+   * entry or a balance movement.
+   */
+  'trade.bot.created': {
+    audited: false,
+    why:
+      'Configuration, not a movement. `insertBot` writes the row and sets the bot\'s own cash and ' +
+      'equity mirror to the allocation the user typed; the ledger is not called at all until the ' +
+      'bot is STARTED, which is the entry below and which is audited for exactly that reason. So ' +
+      'an operator reconstructing where a customer\'s money went learns nothing here that ' +
+      'trade.bot.started does not carry, and it is always the owner configuring their own ' +
+      'automation, so there is no operator authority to prove afterwards. Registering an ' +
+      'intention is not the same fact as acting on it, and auditing both would put two rows in ' +
+      'front of an investigator for one movement — the tessera.parcel.transferred argument.',
+  },
+  // The moment the platform takes capital out of a customer's balance and holds it. `startBot`
+  // calls the ledger's `reserve` as `service:trade` — the service acting on the user's money under
+  // its own authority — and the reservation entry id it returns is the ONLY handle anybody has on
+  // where the allocation went; `trade.bot.paused` below is explicit that the reservation is still
+  // outstanding after a pause, so this row is what an investigator holds until the bot is stopped.
+  // `bot`, because the key is `bot.id` (`TopicSpec.keyedBy: 'bot_id'`).
+  'trade.bot.started': { audited: true, subjectKind: 'bot', outcome: 'allowed' },
   'trade.bot.paused': {
     audited: false,
     why:
-      'No money moves. Pause is deliberately NOT a flatten (trade/src/bots.ts:605) — the position ' +
-      'stays open and the ledger reservation taken at start is untouched — so an operator ' +
-      'reconstructing where a user\'s money went learns nothing from this row. It is also always ' +
-      'the user acting on their own automation: the single caller is POST /v1/bots/:id/actions ' +
-      '(trade/src/server.ts:672) and the actor is always that bot\'s owner, so there is no ' +
-      'operator authority to prove afterwards. The trade facts that DO move money are ' +
-      'trade.fill.settled and trade.fee.settled, which are still in trade\'s own quarantine; when ' +
-      'either is registered this table will demand a decision about it, and that decision should ' +
-      'be yes.',
+      'No money moves. Pause is deliberately NOT a flatten — `pauseBot` leaves the position open ' +
+      'and the ledger reservation taken at start untouched — so an operator reconstructing where ' +
+      'a user\'s money went learns nothing from this row that trade.bot.started did not already ' +
+      'give them. It is also always the user acting on their own automation: the single caller is ' +
+      'the bot actions route and the actor is always that bot\'s owner, so there is no operator ' +
+      'authority to prove afterwards. The trade facts that DO move money are the four audited in ' +
+      'this block, which is the commitment this entry used to make in the future tense.',
   },
+  // A bot spent or received a customer's Shards against the ledger, and the payload carries the
+  // journal `entryId` that proves it. `fill`, because the key is the fill's own id and not the
+  // bot's — `trade/src/topics.ts` argues that partition at length.
+  'trade.fill.settled': { audited: true, subjectKind: 'fill', outcome: 'allowed' },
+  // THE PLATFORM CHARGING A CUSTOMER. A performance fee is money leaving an account on the
+  // estate's own initiative rather than the customer's, which is the strongest case in this whole
+  // table for a row an operator can produce afterwards: "why was I billed this" is answerable from
+  // the settlement id, the period and the entry, or it is not answerable at all.
+  'trade.fee.settled': { audited: true, subjectKind: 'fee_settlement', outcome: 'allowed' },
+  // One order crossing the book moves the balances of TWO customers, and the exchange is the
+  // platform's own venue rather than a third party's. `order`, the taker's, matching `keyedBy`.
+  // Behind TRADE_EXCHANGE_ENABLED, and decided now for the reason the registry entry gives: the
+  // day the flag goes on is the worst day to discover the log has no opinion about it.
+  'trade.order.filled': { audited: true, subjectKind: 'order', outcome: 'allowed' },
+  // Money crossing the boundary between a customer's wallet and their exchange balance — the one
+  // trade event that corresponds to a ledger entry a reconciliation can be run against. This is
+  // the same fact wallet's own deposit and withdrawal topics are audited for, on the other side of
+  // the same boundary; auditing one end and not the other would leave a movement with a row at its
+  // origin and none at its destination.
+  'trade.transfer.settled': { audited: true, subjectKind: 'exchange_transfer', outcome: 'allowed' },
 
   /* ---------------------------------------------------------------- a world, and one thing in it */
   //

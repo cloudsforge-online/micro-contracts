@@ -160,6 +160,121 @@ test('the four adopted proposals match the emit site they were read from', () =>
 })
 
 /**
+ * The six of micro-org#345, pinned field for field for the same reason the four above are.
+ *
+ * These were pasted from `trade/src/topics.ts`'s own quarantine rather than retyped, so the whole
+ * value of the paste is that the registry says exactly what the producer proposed. The expected
+ * values below were read off the emit site a second time, not copied out of `index.ts`: it is the
+ * `keyedBy` column that the custody defect turned on, and it is the column an author landing six
+ * topics at once is most likely to get right five times.
+ */
+test('the six trade proposals match the emit site they were read from', () => {
+  assert.deepEqual(
+    {
+      'trade.bot.created': TOPICS['trade.bot.created'],
+      'trade.bot.started': TOPICS['trade.bot.started'],
+      'trade.fill.settled': TOPICS['trade.fill.settled'],
+      'trade.fee.settled': TOPICS['trade.fee.settled'],
+      'trade.order.filled': TOPICS['trade.order.filled'],
+      'trade.transfer.settled': TOPICS['trade.transfer.settled'],
+    },
+    {
+      // trade/src/bots.ts — `key: bot.id` at both the create and the start emit, the same key
+      // `trade.bot.paused` above already uses. One bot's lifecycle is one partition.
+      'trade.bot.created': {
+        producer: 'trade',
+        payloadType: 'BotCreated',
+        version: '1.0',
+        keyedBy: 'bot_id',
+        description: 'A trading bot was configured, with its mode, strategy and allocation.',
+      },
+      'trade.bot.started': {
+        producer: 'trade',
+        payloadType: 'BotStarted',
+        version: '1.0',
+        keyedBy: 'bot_id',
+        description: 'A bot began trading and its allocation was reserved through the ledger.',
+      },
+      // trade/src/fills.ts — `key: value.fill.id`. NOT the bot: a bot's fills are independent
+      // settlements and keying them by the bot would serialise a busy bot's whole history behind
+      // one slow consumer.
+      'trade.fill.settled': {
+        producer: 'trade',
+        payloadType: 'FillSettled',
+        version: '1.0',
+        keyedBy: 'fill_id',
+        description: 'A bot fill settled against the ledger, with its journal entry.',
+      },
+      // trade/src/fees.ts — `key: row.id`, the settlement row, not the bot and not the period.
+      'trade.fee.settled': {
+        producer: 'trade',
+        payloadType: 'FeeSettled',
+        version: '1.0',
+        keyedBy: 'settlement_id',
+        description:
+          'A performance fee settlement completed for a bot period, with its entry.',
+      },
+      // trade/src/exchange.ts — `key: order.id`, the taker's. Two partial fills of one order are
+      // the sequence that exists and must order against each other.
+      'trade.order.filled': {
+        producer: 'trade',
+        payloadType: 'OrderFilled',
+        version: '1.0',
+        keyedBy: 'order_id',
+        description:
+          'An exchange order filled, wholly or partly, with the quantity and notional it traded.',
+      },
+      // trade/src/transfers.ts — `key: transfer.id`.
+      'trade.transfer.settled': {
+        producer: 'trade',
+        payloadType: 'TransferSettled',
+        version: '1.0',
+        keyedBy: 'transfer_id',
+        description:
+          'A deposit into or withdrawal out of an exchange balance settled against the ledger.',
+      },
+    },
+    'trade/src/topics.ts proposed a spec the registry does not hold',
+  )
+})
+
+/**
+ * WHAT REGISTRATION ACTUALLY BOUGHT, and the reason micro-org#345 calls the missing timeline rows
+ * the symptom rather than the defect.
+ *
+ * `collectEnvelopeDefects` can only check that a producer owns a topic when a `TopicSpec` exists to
+ * check it against; for an unregistered topic it records `unregisteredTopic` and leaves `spec`
+ * undefined, so the ownership branch is skipped entirely. Measured on main on 2026-08-10, before
+ * these six were registered:
+ *
+ *     classifyEnvelope({ topic: 'trade.fee.settled', producer: 'wallet', … })
+ *       → { reason: 'unregistered_topic', defects: [] }        // shelved, no defect recorded
+ *     classifyEnvelope({ topic: 'trade.bot.paused', producer: 'wallet', … })
+ *       → { reason: 'malformed', defects: ['producer: "wallet" does not own topic …'] }
+ *
+ * Two envelopes forging the same service's events, one of which the estate noticed. Delete any of
+ * the six entries from `TOPICS` and the matching line here goes back to `unregistered_topic`.
+ */
+test('a forged producer on the six is now a defect rather than a shelved stranger', () => {
+  for (const topic of [
+    'trade.bot.created',
+    'trade.bot.started',
+    'trade.fill.settled',
+    'trade.fee.settled',
+    'trade.order.filled',
+    'trade.transfer.settled',
+  ] as const) {
+    const forged = { ...makeEvent({ topic, key: 'k', actor: 'system', payload: {} }), producer: 'wallet' }
+    const outcome = classifyEnvelope(forged)
+    assert.equal(outcome.reason, 'malformed', `${topic}: a forged producer was shelved, not refused`)
+    assert.ok(
+      outcome.defects.some((d) => d.startsWith('producer:')),
+      `${topic}: refused for some other reason than the producer not owning it`,
+    )
+  }
+})
+
+/**
  * The fourth adopted proposal was adopted VERBATIM, and that is a property worth asserting.
  *
  * Two repositories quarantined `market.offer.made` — the producer (`market/src/topics.ts`) and its
@@ -239,7 +354,16 @@ test('the registry is an enumerated inventory — every addition is deliberate',
     'tessera.parcel.transferred',
     'tessera.venue.booked',
     'tessera.ward.opened',
+    // micro-org#345: trade's other six, landing together. `trade.bot.paused` sat here alone for the
+    // whole life of the service while the six that surround it — including the four that move a
+    // customer's money — arrived at `activity` as `unclassified`.
+    'trade.bot.created',
     'trade.bot.paused',
+    'trade.bot.started',
+    'trade.fee.settled',
+    'trade.fill.settled',
+    'trade.order.filled',
+    'trade.transfer.settled',
     'wallet.deposit.confirmed',
     'wallet.deposit.token_uncredited',
     'wallet.deposit_address.assigned',
