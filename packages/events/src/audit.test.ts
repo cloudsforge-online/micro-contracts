@@ -14,7 +14,7 @@ import { AUDITED_TOPICS, TOPIC_AUDIT, auditRowFor } from './audit.ts'
 test('every registered topic has an audit decision, and every decision names a real topic', () => {
   const decided = Object.keys(TOPIC_AUDIT).sort()
   assert.deepEqual(decided, [...TOPIC_NAMES].sort())
-  assert.equal(decided.length, 62, 'the topic registry changed; every addition needs a decision')
+  assert.equal(decided.length, 63, 'the topic registry changed; every addition needs a decision')
 })
 
 /**
@@ -71,6 +71,11 @@ test('the inventory of audited topics is pinned — a widening is deliberate', (
     // other six are simulation and say so at the length of a decision.
     'tessera.object.anchored',
     'wallet.deposit.confirmed',
+    // micro-org#200. Audited for the same reason its sibling above is — it is a fact about a
+    // customer's money — and it is the only entry in this inventory that records money the estate
+    // HOLDS and has not booked. An operator asked "what is at that address and why is it in
+    // nobody's balance" has this row and micro-wallet's table, and nothing else.
+    'wallet.deposit.token_uncredited',
     'wallet.deposit_address.assigned',
     'wallet.link.revoked',
     'wallet.link.verified',
@@ -122,8 +127,14 @@ test('every audited topic names a subject kind in the console vocabulary', () =>
 })
 
 /**
- * The three failures. An operator filtering the log for what went wrong must find exactly these,
- * and finding them is the point: each is a customer who asked for something and did not get it.
+ * The failures. An operator filtering the log for what went wrong must find exactly these, and
+ * finding them is the point: each is a customer who asked for something and did not get it.
+ *
+ * `wallet.deposit.token_uncredited` is the one that widens that sentence, and it is worth saying
+ * how. Every other entry is money the customer asked to have MOVED and did not; this is money the
+ * customer moved TO the platform, which arrived, and which is in no balance and cannot be
+ * withdrawn — micro-org#200. Read as "allowed" it would be a successful deposit in the log, which
+ * is the exact misreading the separate topic exists to prevent.
  *
  * `settlement.outbound.failed` joined them with the settlement registration wave. It is the one
  * that carries a REMEDY as well as a fact — `refundable` is what wallet reads to decide whether the
@@ -138,6 +149,7 @@ test('the only failed outcomes are the topics that report a non-event', () => {
   assert.deepEqual(failed, [
     'settlement.outbound.failed',
     'settlement.withdrawal.stuck',
+    'wallet.deposit.token_uncredited',
     // wallet's two, added with the five topics it emitted against a registry that knew three. Both
     // are money a customer asked for and did not get: a refund is the reservation coming back, and
     // `stuck` is it not coming back yet. An operator filtering the log for failures must find them.

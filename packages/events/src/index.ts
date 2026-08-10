@@ -396,6 +396,47 @@ export const TOPICS = Object.freeze({
     keyedBy: 'wallet_id',
     description: 'FIRST. A deposit reached its confirmation depth and was credited.',
   }),
+  /**
+   * **The opposite fact to the one above, and it is registered because silence was the defect.**
+   *
+   * micro-org#200. A token transfer — USDT and USDC are the ones anybody will actually send —
+   * reaches a custodial deposit address, and `micro-wallet` will not credit it. That refusal is
+   * right and stays: crediting a `TOKEN:` asset needs a decimals value nothing in this estate is a
+   * source for (`contracts-money.assetDecimals` throws for a `TOKEN:` code rather than return 18,
+   * because Tether is six decimals on Ethereum and eighteen on BSC and a wrong exponent on a
+   * stablecoin is a balance wrong by 10^12), a `chain_assets` row only `micro-ledger` may write, a
+   * `micro-pricing` route that answers for the urn — it answers `404 not_found` — and a token
+   * withdrawal path that does not exist in any form.
+   *
+   * What was wrong was that the refusal was SILENT: the movement was consumed and discarded, and
+   * nothing anywhere held the fact that a user's money was sitting at an address only
+   * `micro-custody` can sign for. The producer now records the sighting and emits this.
+   *
+   * **A separate name rather than a field on `wallet.deposit.confirmed`, and that is the whole
+   * point of registering it.** One deposit topic carrying a `credited` boolean makes "your money is
+   * spendable" and "your money is here and cannot be moved" the same event to every subscriber that
+   * forgets to read one field. Two names make the wrong reading unavailable rather than discouraged.
+   *
+   * `keyedBy: wallet_id` is read off the producer's emit rather than chosen here, and it matches
+   * `wallet.deposit.confirmed` deliberately: the two opposite facts about one wallet stay ordered
+   * against each other instead of racing across partitions.
+   *
+   * The payload carries the amount in the token's own smallest units and **no formatted figure and
+   * no decimals**, because the producer has no source for them — that absence is the reason the
+   * deposit is not credited in the first place. A consumer renders the integer or says nothing.
+   * The token is named by its contract address, never by a symbol: a symbol is mutable, spoofable
+   * and off-chain, and `USDT` as a code is one brand over three deployments with two different
+   * exponents (`contracts-money.chainTokenAssetCode` throws on a brand name).
+   */
+  'wallet.deposit.token_uncredited': Object.freeze({
+    producer: 'wallet',
+    payloadType: 'DepositTokenUncredited',
+    version: '1.0',
+    keyedBy: 'wallet_id',
+    description:
+      'A token transfer reached its confirmation depth at a deposit address and was NOT credited: ' +
+      'no ledger entry exists for it and it cannot be withdrawn.',
+  }),
   'wallet.withdrawal.requested': Object.freeze({
     producer: 'wallet',
     payloadType: 'WithdrawalRequested',
