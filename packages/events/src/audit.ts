@@ -157,6 +157,16 @@ export const TOPIC_AUDIT = Object.freeze({
   },
   'wallet.wallet.created': { audited: true, subjectKind: 'wallet', outcome: 'allowed' },
   'wallet.deposit.confirmed': { audited: true, subjectKind: 'wallet', outcome: 'allowed' },
+  // `failed`, and it is the clearest case in this table for that outcome: a customer's money
+  // arrived at an address the platform controls and no ledger entry accounts for it. An operator
+  // filtering the log for failures is filtering for exactly this — money the estate is holding
+  // against a liability it never recorded — and the row is the only durable trace outside
+  // micro-wallet's own table. micro-org#200.
+  'wallet.deposit.token_uncredited': {
+    audited: true,
+    subjectKind: 'wallet',
+    outcome: 'failed',
+  },
   'wallet.withdrawal.requested': { audited: true, subjectKind: 'wallet', outcome: 'allowed' },
   // An address the platform will credit money arriving at. "Which address did we give this person,
   // and when" is an incident question, and it had no answer.
