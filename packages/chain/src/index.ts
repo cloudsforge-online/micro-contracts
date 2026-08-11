@@ -705,6 +705,52 @@ export const ON_CHAIN_ASSETS: readonly AssetCode[] = Object.freeze([
   'XRP',
 ])
 
+/**
+ * **The assets a deposit can actually arrive in.** A strict subset of `ON_CHAIN_ASSETS`, and the
+ * only list that may appear in a promise made to a customer.
+ *
+ * ── WHY THIS EXISTS, AND WHY THE ARRAY ABOVE COULD NOT ANSWER THE QUESTION ──────────────────────
+ *
+ * `ON_CHAIN_ASSETS` answers "which chains does this estate model" — the ledger can supervise a
+ * balance denominated in one, the oracle can price it, the SDK can name it. Item 1 of the order
+ * written above this file's other list — *wire the follower, the addresses and the sweep* — is a
+ * separate fact, and for five of the eight it is not done. The note above `ON_CHAIN_ASSETS` has
+ * said so in prose since 2026-08-08: "They are listed here because the ledger can supervise a
+ * balance denominated in them and the oracle can price them, **not because a deposit can arrive**."
+ *
+ * Prose is not a declaration, and while it stayed prose the marketing site derived a promise from
+ * the wrong array. `cloudsforge.online` published "Eight coins, not just ours — your wallet holds
+ * EMBER, Bitcoin, Ethereum, Ethereum Classic, Litecoin, Dogecoin, Solana, XRP Ledger", correctly
+ * derived, and untrue of five of them: send Solana to CloudsForge today and nothing observes it,
+ * because no follower is watching that chain and no address was ever handed out on it. The owner
+ * caught it on 2026-08-11. This is the same defect `micro-foresight` fixed with
+ * `STAKE_ASSET_REGISTRY` (micro-org#291) — *being nameable by the estate and being accepted at the
+ * door are different facts, and only the second belongs in a promise* — and it is fixed the same
+ * way: the second fact gets a declaration of its own, so a page can derive it instead of inheriting
+ * the first one by accident.
+ *
+ * ── WHAT PUTS AN ASSET ON THIS LIST ─────────────────────────────────────────────────────────────
+ *
+ * A follower that reads the chain, an address the estate can hand out, and a sweep that moves what
+ * arrives. Measured on the mainnet estate on 2026-08-11, `micro-indexer` is configured for exactly
+ * three — `INDEXER_RPC_EMBER_MAINNET`, `INDEXER_RPC_BTC_MAINNET`, `INDEXER_RPC_LTC_MAINNET` — and
+ * `INDEXER_CHAINS` has never named any other. The five absentees are absent for two distinct
+ * reasons, and neither is "nobody got round to it":
+ *
+ *   - **DOGE** has the code. `family: 'bitcoin'` means it needs no worker of its own
+ *     (`indexer/src/chains.ts`), and merge-mining against Litecoin is built. It waits on this
+ *     estate's dogecoind, which was 39.6% through initial block download on 2026-08-10.
+ *   - **ETH, ETC, SOL and XRP** have no follower running and no address ever issued.
+ *
+ * ── THE RULE FOR EDITING IT ─────────────────────────────────────────────────────────────────────
+ *
+ * An asset joins this array in the release that turns its follower on, and not in the one that
+ * writes it. The cost of being early here is not a red test — it is a customer sending money to a
+ * chain nobody is watching, which is the one failure in this file that cannot be corrected
+ * downstream.
+ */
+export const CREDITABLE_ASSETS: readonly AssetCode[] = Object.freeze(['EMBER', 'BTC', 'LTC'])
+
 export function chainSpec(asset: AssetCode): ChainSpec {
   const spec = CHAINS[asset]
   if (!spec) throw new Error(`unknown asset: ${asset}`)

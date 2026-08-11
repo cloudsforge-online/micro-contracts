@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 import {
   CHAINS,
   EMBER_DECIMALS,
+  CREDITABLE_ASSETS,
   ON_CHAIN_ASSETS,
   RATE_SCALE,
   SHARDS_PER_USD,
@@ -281,6 +282,44 @@ test('every member of ON_CHAIN_ASSETS is a chain this file actually knows the ru
   // And the retired asset stays out of it: SHARD is in CHAINS so `chainSpec` is total, which is
   // exactly why membership here has to be its own list rather than `Object.keys(CHAINS)`.
   assert.ok(!ON_CHAIN_ASSETS.includes('SHARD'))
+})
+
+test('CREDITABLE_ASSETS is a strict subset of ON_CHAIN_ASSETS, in the same order', () => {
+  // Strict, and that is the assertion rather than an implementation detail: the day the two lists
+  // are equal is the day a page can go back to deriving a promise from the larger one, and this
+  // test is where somebody finds that out. Until then the gap is the whole point of the smaller
+  // list existing.
+  assert.ok(CREDITABLE_ASSETS.length > 0, 'nothing can be deposited at all')
+  assert.ok(
+    CREDITABLE_ASSETS.length < ON_CHAIN_ASSETS.length,
+    'every modelled chain now takes deposits — delete CREDITABLE_ASSETS and its claims rather ' +
+      'than leaving two lists that say the same thing',
+  )
+  for (const asset of CREDITABLE_ASSETS) {
+    assert.ok(ON_CHAIN_ASSETS.includes(asset), `${asset} takes deposits but is not a modelled chain`)
+  }
+  // Same order as the larger list, because both are rendered as prose on the same site and a
+  // reader meeting them on two pages should not have to wonder whether the difference is meaning.
+  const inOrder = ON_CHAIN_ASSETS.filter((a) => CREDITABLE_ASSETS.includes(a))
+  assert.deepEqual([...CREDITABLE_ASSETS], [...inOrder])
+})
+
+test('the assets that take deposits are the three the estate actually follows', () => {
+  /*
+   * A CHANGE-DETECTOR, ON PURPOSE, AND THE ONLY ONE IN THIS FILE.
+   *
+   * Every other assertion here is about a property. This one names three strings, because the
+   * failure it guards is a person adding a fourth in the release that WRITES a follower rather
+   * than the one that TURNS IT ON — and no property this file can compute tells those apart. A
+   * red test with this message is the prompt to go and check the estate, which is the only place
+   * the answer lives.
+   *
+   * DOGE is the one to expect next: `family: 'bitcoin'` means it needs no worker of its own, and
+   * it waits only on this estate's dogecoind finishing initial block download.
+   */
+  assert.deepEqual([...CREDITABLE_ASSETS], ['EMBER', 'BTC', 'LTC'])
+  assert.ok(!CREDITABLE_ASSETS.includes('DOGE'), 'dogecoind was still in IBD when this was written')
+  assert.ok(!CREDITABLE_ASSETS.includes('SHARD'))
 })
 
 test('EMBER is 18 decimals, because Hearth is an account-model EVM chain', () => {
