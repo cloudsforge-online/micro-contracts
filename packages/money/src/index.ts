@@ -551,10 +551,16 @@ export function wouldOverdraw(
  * unknown kind with a 400 before it opens a transaction, and `journal_entries_kind_chk` refuses it
  * again in the database — so a service that posts a kind that is not here does not post at all.
  * Two services have already learned that the expensive way: `foresight.settlement_fee` posted
- * nothing for months, and `item_issue` (below) meant no micro-tessera object was ever issued.
+ * nothing for months, and `item_issue` (last) meant no micro-tessera object was ever issued.
  *
  * The remedy for the next one is not to relax the set. It is to type the request: a client whose
  * `PostEntryRequest.kind` is `EntryKind` rather than `string` cannot compile the mistake.
+ *
+ * **A new kind is APPENDED, never inserted.** The tuple's indices are part of the published
+ * surface — `ENTRY_KINDS[10]` is a path the additive-evolution check compares across refs — so
+ * putting `item_issue` next to `reward_granted`, where it reads best, renamed every kind after
+ * it and the check called that breaking. Grouping is what the list below the fold in
+ * 04-domain-model.md §2.2 is for; this array is append-only.
  */
 export const ENTRY_KINDS = Object.freeze([
   'deposit_credited',
@@ -567,7 +573,6 @@ export const ENTRY_KINDS = Object.freeze([
   'subscription_charge',
   'fee_charged',
   'reward_granted',
-  'item_issue',
   'market_escrow',
   'market_settled',
   'royalty_paid',
@@ -578,6 +583,7 @@ export const ENTRY_KINDS = Object.freeze([
   'adjustment',
   'reconciliation_correction',
   'reversal',
+  'item_issue',
 ] as const)
 
 export type EntryKind = (typeof ENTRY_KINDS)[number]

@@ -339,7 +339,6 @@ test('the entry kinds are the closed set from the domain model, in order', () =>
       'subscription_charge',
       'fee_charged',
       'reward_granted',
-      'item_issue',
       'market_escrow',
       'market_settled',
       'royalty_paid',
@@ -350,6 +349,7 @@ test('the entry kinds are the closed set from the domain model, in order', () =>
       'adjustment',
       'reconciliation_correction',
       'reversal',
+      'item_issue',
     ],
   )
   assert.equal(isEntryKind('deposit_credited'), true)
@@ -365,6 +365,10 @@ test('item_issue is in the set, because micro-tessera posts it on every object a
   // the CHECK constraint is what the database enforces. micro-ledger's `migrations.test.ts`
   // asserts the two lists are equal, so a change to one alone turns that test red.
   assert.equal(isEntryKind('item_issue'), true)
+  // It sits at the END, not next to `reward_granted` where it reads best. Each tuple index is a
+  // published path to the additive-evolution check, so an insertion renames every kind after it
+  // and is reported as twelve breaking changes. New kinds are appended.
+  assert.equal(ENTRY_KINDS.at(-1), 'item_issue')
 })
 
 // ---------------------------------------------------------------------------
