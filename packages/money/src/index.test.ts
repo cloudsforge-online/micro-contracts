@@ -339,6 +339,7 @@ test('the entry kinds are the closed set from the domain model, in order', () =>
       'subscription_charge',
       'fee_charged',
       'reward_granted',
+      'item_issue',
       'market_escrow',
       'market_settled',
       'royalty_paid',
@@ -354,6 +355,16 @@ test('the entry kinds are the closed set from the domain model, in order', () =>
   assert.equal(isEntryKind('deposit_credited'), true)
   assert.equal(isEntryKind('topup'), false)
   assert.equal(ACCOUNT_PURPOSES.length, 7)
+})
+
+test('item_issue is in the set, because micro-tessera posts it on every object activation', () => {
+  // Added by the same change as micro-ledger's migration 16. It was written into
+  // `tessera/src/ledgerclient.ts` before it existed anywhere else, so every issuance micro-tessera
+  // attempted was answered `400 invalid_entry` and no object was ever brought into the ledger.
+  // The two halves must land together: this constant is what micro-ledger validates against, and
+  // the CHECK constraint is what the database enforces. micro-ledger's `migrations.test.ts`
+  // asserts the two lists are equal, so a change to one alone turns that test red.
+  assert.equal(isEntryKind('item_issue'), true)
 })
 
 // ---------------------------------------------------------------------------

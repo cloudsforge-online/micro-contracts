@@ -544,7 +544,18 @@ export function wouldOverdraw(
 // Entries and postings
 // ---------------------------------------------------------------------------
 
-/** The closed set from 04-domain-model.md §2.2. It is also the audit vocabulary. */
+/**
+ * The closed set from 04-domain-model.md §2.2. It is also the audit vocabulary.
+ *
+ * **Closed means a caller may not invent one.** micro-ledger's `validateEntryRequest` rejects an
+ * unknown kind with a 400 before it opens a transaction, and `journal_entries_kind_chk` refuses it
+ * again in the database — so a service that posts a kind that is not here does not post at all.
+ * Two services have already learned that the expensive way: `foresight.settlement_fee` posted
+ * nothing for months, and `item_issue` (below) meant no micro-tessera object was ever issued.
+ *
+ * The remedy for the next one is not to relax the set. It is to type the request: a client whose
+ * `PostEntryRequest.kind` is `EntryKind` rather than `string` cannot compile the mistake.
+ */
 export const ENTRY_KINDS = Object.freeze([
   'deposit_credited',
   'withdrawal_requested',
@@ -556,6 +567,7 @@ export const ENTRY_KINDS = Object.freeze([
   'subscription_charge',
   'fee_charged',
   'reward_granted',
+  'item_issue',
   'market_escrow',
   'market_settled',
   'royalty_paid',
