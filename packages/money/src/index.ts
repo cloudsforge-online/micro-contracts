@@ -551,7 +551,7 @@ export function wouldOverdraw(
  * unknown kind with a 400 before it opens a transaction, and `journal_entries_kind_chk` refuses it
  * again in the database — so a service that posts a kind that is not here does not post at all.
  * Two services have already learned that the expensive way: `foresight.settlement_fee` posted
- * nothing for months, and `item_issue` (last) meant no micro-tessera object was ever issued.
+ * nothing for months, and `item_issue` meant no micro-tessera object was ever issued.
  *
  * The remedy for the next one is not to relax the set. It is to type the request: a client whose
  * `PostEntryRequest.kind` is `EntryKind` rather than `string` cannot compile the mistake.
@@ -584,6 +584,7 @@ export const ENTRY_KINDS = Object.freeze([
   'reconciliation_correction',
   'reversal',
   'item_issue',
+  'liquidity_seed',
 ] as const)
 
 export type EntryKind = (typeof ENTRY_KINDS)[number]
