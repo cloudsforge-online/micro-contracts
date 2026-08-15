@@ -1,7 +1,0 @@
-[
-  {
-    "path": "ENTRY_KINDS.length",
-    "acceptedIn": "1.2.0",
-    "reason": "ENTRY_KINDS is a frozen tuple, so its length is part of its type and adding a member necessarily changes it from 20 to 21. There is no additive form: a second array alongside it would be a second closed vocabulary, and micro-ledger validates entries against exactly one. The added member is item_issue, which micro-tessera has been posting since it was written — every issuance was answered 400 invalid_entry and no object has ever entered the ledger (micro-org#407 §3). A consumer that reads the length reads a count of kinds it must already handle a default branch for; one that indexes it is unaffected, because the member is appended, not inserted."
-  }
-]
