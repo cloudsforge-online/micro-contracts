@@ -350,6 +350,7 @@ test('the entry kinds are the closed set from the domain model, in order', () =>
       'reconciliation_correction',
       'reversal',
       'item_issue',
+      'liquidity_seed',
     ],
   )
   assert.equal(isEntryKind('deposit_credited'), true)
@@ -365,10 +366,30 @@ test('item_issue is in the set, because micro-tessera posts it on every object a
   // the CHECK constraint is what the database enforces. micro-ledger's `migrations.test.ts`
   // asserts the two lists are equal, so a change to one alone turns that test red.
   assert.equal(isEntryKind('item_issue'), true)
-  // It sits at the END, not next to `reward_granted` where it reads best. Each tuple index is a
-  // published path to the additive-evolution check, so an insertion renames every kind after it
-  // and is reported as twelve breaking changes. New kinds are appended.
-  assert.equal(ENTRY_KINDS.at(-1), 'item_issue')
+  // It sits AFTER `reversal`, not next to `reward_granted` where it reads best. Each tuple index
+  // is a published path to the additive-evolution check, so an insertion renames every kind after
+  // it and is reported as twelve breaking changes. New kinds are appended.
+  assert.equal(ENTRY_KINDS.indexOf('item_issue'), 20)
+})
+
+test('liquidity_seed is in the set, because seeding an AMM pool is neither a spend nor a transfer', () => {
+  // Forge Exchange phase F (docs/ecosystem/39 §6) puts EMBER the estate mined into a Hearth V2
+  // pair. The gate on that phase is that the estate's own solvency reporting books it, and no
+  // existing kind says what happened. It is not a `treasury_spend` — nothing left the estate, and
+  // the position is recoverable in full by burning the LP tokens the estate holds. It is not a
+  // `transfer` — a transfer moves value between two subjects who each still hold it afterwards,
+  // whereas here the counter-asset is minted and the pair's reserves move on every stranger's
+  // swap. It is not a `conversion` — no asset was exchanged for another at a rate.
+  //
+  // What it is: the project's own EMBER moving from unbooked mining income into a position it
+  // still owns but no longer controls the price of. So it posts DEBIT platform/EMBER/reserved
+  // (asset) against CREDIT platform/EMBER/treasury (equity), and deliberately NOT against
+  // anything with subject 'custody' — `ledger/src/reconcile.ts` sums exactly that subject against
+  // the indexer's watched addresses, EMBER's drift tolerance is zero, and an AMM reserve that
+  // moves whenever a stranger trades would freeze every EMBER withdrawal in the estate the first
+  // time someone swapped. docs/ecosystem/35 calls that failure "an invented insolvency".
+  assert.equal(isEntryKind('liquidity_seed'), true)
+  assert.equal(ENTRY_KINDS.at(-1), 'liquidity_seed')
 })
 
 // ---------------------------------------------------------------------------
