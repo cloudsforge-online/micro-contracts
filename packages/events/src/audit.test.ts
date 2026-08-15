@@ -14,7 +14,7 @@ import { AUDITED_TOPICS, TOPIC_AUDIT, auditRowFor } from './audit.ts'
 test('every registered topic has an audit decision, and every decision names a real topic', () => {
   const decided = Object.keys(TOPIC_AUDIT).sort()
   assert.deepEqual(decided, [...TOPIC_NAMES].sort())
-  assert.equal(decided.length, 69, 'the topic registry changed; every addition needs a decision')
+  assert.equal(decided.length, 70, 'the topic registry changed; every addition needs a decision')
 })
 
 /**
@@ -59,6 +59,7 @@ test('the inventory of audited topics is pinned — a widening is deliberate', (
     'ledger.reconciliation.completed',
     'market.listing.sold',
     'mint.deploy.confirmed',
+    'mint.deploy.funding_requested',
     'settlement.outbound.failed',
     'settlement.sweep.completed',
     'settlement.withdrawal.completed',
