@@ -658,6 +658,50 @@ export const TOPICS = Object.freeze({
     keyedBy: 'token_id',
     description: 'FIRST. A contract is live at an address. Retires the four-second client poll.',
   }),
+  /**
+   * THE TOPIC WITHOUT WHICH A PAID DEPLOY NEVER REACHES A CHAIN.
+   *
+   * ── The defect it closes, measured on the live estate ─────────────────────────────────────
+   *
+   * `mint` charges the customer, asks custody for a per-order deployer address, reads that
+   * address's native balance against what the deploy will cost, and — finding zero, because the
+   * address was minted seconds earlier and nothing has ever sent to it — logs `deploy is awaiting
+   * funds`, releases its lease and comes back on the next tick to find zero again. For ever.
+   * `docs/ecosystem/15-monetisation-model` §3.2 says the platform pre-funds that address; nothing
+   * in any of the 58 repositories implemented it. The one token that has ever deployed on testnet
+   * deployed because an operator hand-sent 1 EMBER to the address from the miner coinbase.
+   *
+   * ── Why it is an event, and why it is MINT that emits it ─────────────────────────────────
+   *
+   * `mint` holds `custody:sign:deployer` and nothing else. The address with the money in it is the
+   * TREASURY, and the only service holding `custody:sign:treasury` is `settlement`. So the service
+   * that knows a deploy is short is structurally not the service that can pay for it, and the
+   * handover has to cross a boundary. 03 §2 rule 5 decides which kind: the shortfall is a state
+   * change others care about, written in the same transaction as the move back to `awaiting_funds`,
+   * so it is an outbox row. `settlement`'s write surface is `POST /v1/events` and nothing else,
+   * which is the same answer from the other side.
+   *
+   * ── What the consumer is allowed to trust ────────────────────────────────────────────────
+   *
+   * `requiredWei` is mint's own arithmetic — a gas-price bid against an `eth_estimateGas` for the
+   * exact creation bytecode — and settlement cannot recompute it, because it does not have the
+   * bytecode. So it is trusted for the AMOUNT and bounded by a cap settlement owns; the number of
+   * top-ups per token is bounded there too. `attempt` is on the payload so that a second, later
+   * request for the same token is a distinguishable outbound transaction rather than a duplicate
+   * of the first: the idempotency key is built from `(token_id, attempt)`, so a redelivery collapses
+   * and a genuine re-ask does not.
+   *
+   * Keyed by `token_id`, which is the whole mint family's partition. One order's requests stay in
+   * order against one order's lifecycle; two orders do not serialise against each other.
+   */
+  'mint.deploy.funding_requested': Object.freeze({
+    producer: 'mint',
+    payloadType: 'DeployFundingRequested',
+    version: '1.0',
+    keyedBy: 'token_id',
+    description:
+      'A paid deploy cannot pay its own gas: the per-order deployer address is short by a named amount. The platform funding its own address, not a user-facing fact.',
+  }),
   'market.listing.sold': Object.freeze({
     producer: 'market',
     payloadType: 'ListingSold',

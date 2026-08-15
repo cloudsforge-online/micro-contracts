@@ -236,6 +236,14 @@ export const TOPIC_AUDIT = Object.freeze({
       'wrong and must be revisited here.',
   },
   'mint.deploy.confirmed': { audited: true, subjectKind: 'token', outcome: 'allowed' },
+  // Treasury money leaving for an address the platform itself controls, and the ONLY record of it
+  // on the bus: settlement plans this as a `gas_topup` outbound, and `settlement/src/worker.ts`
+  // deliberately emits nothing when a top-up confirms. Excluding the request would leave an
+  // operator asking "why did the treasury balance drop" with nothing to read.
+  // `allowed` rather than `failed` even though it reports a deploy that cannot proceed: a freshly
+  // derived deployer address always holds zero, so this fires once on the happy path of EVERY paid
+  // deploy. Filed as a failure it would bury the rows that are genuinely failures.
+  'mint.deploy.funding_requested': { audited: true, subjectKind: 'token', outcome: 'allowed' },
   'billing.entitlement.granted': { audited: true, subjectKind: 'entitlement', outcome: 'allowed' },
   'billing.entitlement.revoked': { audited: true, subjectKind: 'entitlement', outcome: 'allowed' },
 

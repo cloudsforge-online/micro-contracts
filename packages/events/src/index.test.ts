@@ -342,6 +342,10 @@ test('the registry is an enumerated inventory — every addition is deliberate',
     'market.listing.sold',
     'market.offer.made',
     'mint.deploy.confirmed',
+    // The second mint topic, and the first that is not about a person: a paid deploy telling the
+    // one service holding `custody:sign:treasury` that its per-order deployer cannot pay for
+    // itself. Without it every paid Forge Create order sits in `awaiting_funds` for ever.
+    'mint.deploy.funding_requested',
     'settlement.outbound.confirmed',
     'settlement.outbound.failed',
     'settlement.sweep.completed',

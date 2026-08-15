@@ -1,6 +1,6 @@
 {
   "name": "@cloudsforge/contracts-events",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "The event envelope and topic registry. Additive-only, versioned per topic.",
   "license": "MIT",
   "type": "module",
