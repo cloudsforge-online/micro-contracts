@@ -14,7 +14,7 @@ import { AUDITED_TOPICS, TOPIC_AUDIT, auditRowFor } from './audit.ts'
 test('every registered topic has an audit decision, and every decision names a real topic', () => {
   const decided = Object.keys(TOPIC_AUDIT).sort()
   assert.deepEqual(decided, [...TOPIC_NAMES].sort())
-  assert.equal(decided.length, 70, 'the topic registry changed; every addition needs a decision')
+  assert.equal(decided.length, 84, 'the topic registry changed; every addition needs a decision')
 })
 
 /**
@@ -39,6 +39,15 @@ test('a topic that is not audited says why, at the length of a decision', () => 
 test('the inventory of audited topics is pinned — a widening is deliberate', () => {
   assert.deepEqual([...AUDITED_TOPICS], [
     'aetherholm.skerry.provisioned',
+    // 41-agora.md. TWO of the public square's fourteen, and the widening is deliberate for the one
+    // reason that survives on a service with no money in it: these are the platform acting on a
+    // person rather than people acting on each other. A suspension withdraws somebody's right to
+    // speak here; a moderation action removes what they said. An appeal is answered from these two
+    // rows or it is answered from nothing. The other twelve are conversation, and `SQUARE` argues
+    // at length why mirroring them into a chained, years-retained log would be a surveillance
+    // archive rather than an accountability one.
+    'agora.moderation.acted',
+    'agora.voice.suspended',
     'billing.entitlement.granted',
     'billing.entitlement.revoked',
     'community.proposal.executed',

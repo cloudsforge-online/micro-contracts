@@ -204,6 +204,7 @@ export type ProducerService =
   | 'devplatform'
   | 'admin-api'
   | 'tessera'
+  | 'agora'
 
 export interface TopicSpec {
   /** The service that owns the topic. The first segment of the name must equal it. */
@@ -1193,6 +1194,161 @@ export const TOPICS = Object.freeze({
     keyedBy: 'parcel_id',
     description:
       "A Venue's calendar slot was booked, against an escrowed ledger hold. Keyed by the parcel, because the calendar is the contended resource.",
+  }),
+
+  /* ---------------------------------------------------------------------------------------------
+   * AGORA — 41-agora.md. The public square. Fourteen topics, registered in the same commit as the
+   * service that emits them, which is the rule the tessera block above states and the two identity
+   * topics near the top of this file exist because nobody followed.
+   *
+   * ══════════════════════════════════════════════════════════════════════════════════════════════
+   * **NO CONTENT CROSSES, AND NO SUBJECT CROSSES EXCEPT WHERE A HUMAN MUST BE REACHED.**
+   *
+   * This is the first producer in the estate whose rows are things people WROTE TO EACH OTHER, and
+   * the bus is the one place that distinction is easiest to lose: an event is delivered to every
+   * subscriber and stored in each one's inbox table, for that consumer's retention period, under
+   * that consumer's access rules. So a payload that carried a post body would publish a
+   * followers-only post into services with no concept of who was allowed to read it, and a payload
+   * that carried a whisper body would copy a private message into every one of them. Neither does.
+   * What crosses is that something happened, keyed so a consumer can order it and shaped so a
+   * notifier can build a link — `agora.post.created` carries a tag list and a count of mentions,
+   * `agora.whisper.sent` carries a LENGTH. Read the emit sites in `micro-agora` before widening any
+   * payload here; each one carries the refusal in a comment beside the field that is missing.
+   *
+   * The one deliberate exception is `agora.notification.mail_requested`, which carries the account
+   * subject — because its entire purpose is to ask notify to reach a person, and notify cannot do
+   * that without knowing who. It still carries no address: identity is the system of record for how
+   * to reach somebody, and a copy in a social service is a copy that goes stale the day they change
+   * it. It carries 200 characters of `detail` and no post body.
+   * ══════════════════════════════════════════════════════════════════════════════════════════════
+   *
+   * `keyedBy` was read off each emit site rather than defaulted, and four of the fourteen are
+   * COMPOSITE — `voice_id:post_id` for the two engagements, `follower_id:followee_id` for a follow,
+   * `voice_id:barred_id` for a bar. A composite key is unusual in this registry and it is the right
+   * one here for the same reason `tessera.venue.booked` is keyed by the parcel: the contended
+   * resource is the RELATIONSHIP, not either end of it. Keying a spark by the post would serialise
+   * every reader of a popular post behind one partition; keying it by the voice would let one
+   * person's spark and un-spark of the same post arrive out of order, which renders as a count that
+   * drifts. The pair is the thing that must not race with itself.
+   * ------------------------------------------------------------------------------------------ */
+  'agora.post.created': Object.freeze({
+    producer: 'agora',
+    payloadType: 'PostCreated',
+    version: '1.0',
+    keyedBy: 'post_id',
+    description:
+      'A post, reply or quote was published. Carries the tags, the visibility and whether it has media — never the body, and never the media itself.',
+  }),
+  'agora.post.edited': Object.freeze({
+    producer: 'agora',
+    payloadType: 'PostEdited',
+    version: '1.0',
+    // The same partition as the creation, so an edit cannot overtake the post it edits.
+    keyedBy: 'post_id',
+    description:
+      'A post was edited inside its edit window. Carries neither the old text nor the new: a consumer that wants the current words reads the post.',
+  }),
+  'agora.post.deleted': Object.freeze({
+    producer: 'agora',
+    payloadType: 'PostDeleted',
+    version: '1.0',
+    keyedBy: 'post_id',
+    description:
+      'A post was deleted by its author. Soft in the database — the row anchors the thread around it — but for every consumer this means gone.',
+  }),
+  'agora.spark.created': Object.freeze({
+    producer: 'agora',
+    payloadType: 'SparkCreated',
+    version: '1.0',
+    // See the block header: the pair, because one voice sparking and un-sparking one post is the
+    // sequence that must not reorder. Un-sparking emits nothing — there is no `spark.removed` — so
+    // this topic is an "at least this happened" signal and never a running total.
+    keyedBy: 'voice_id:post_id',
+    description:
+      'A voice sparked a post. There is no matching removal event: a consumer counting sparks from the bus would count wrong, and the count lives on the post.',
+  }),
+  'agora.echo.created': Object.freeze({
+    producer: 'agora',
+    payloadType: 'EchoCreated',
+    version: '1.0',
+    keyedBy: 'voice_id:post_id',
+    description:
+      'A voice echoed a post onto its own timeline. Only a public post can be echoed, so this event never republishes something a reader was not allowed to see.',
+  }),
+  'agora.voice.renamed': Object.freeze({
+    producer: 'agora',
+    payloadType: 'VoiceRenamed',
+    version: '1.0',
+    keyedBy: 'voice_id',
+    description:
+      'A voice changed its handle. Carries both the old and the new, because a mention or a link that named the old one is now wrong and only this event says so.',
+  }),
+  'agora.voice.suspended': Object.freeze({
+    producer: 'agora',
+    payloadType: 'VoiceSuspended',
+    version: '1.0',
+    keyedBy: 'voice_id',
+    description:
+      'An operator suspended a voice. The account is untouched — this is the square withdrawing a right to post, not identity disabling a login.',
+  }),
+  'agora.follow.created': Object.freeze({
+    producer: 'agora',
+    payloadType: 'FollowCreated',
+    version: '1.0',
+    keyedBy: 'follower_id:followee_id',
+    description:
+      "A voice followed another, or asked to. Carries the state, because a locked voice's follow is pending until it is approved and the two are different facts.",
+  }),
+  'agora.bar.created': Object.freeze({
+    producer: 'agora',
+    payloadType: 'BarCreated',
+    version: '1.0',
+    keyedBy: 'voice_id:barred_id',
+    description:
+      'A voice barred another. Symmetric and total by construction, and enforced by a unique index rather than by each reader remembering to check both directions.',
+  }),
+  'agora.circle.created': Object.freeze({
+    producer: 'agora',
+    payloadType: 'CircleCreated',
+    version: '1.0',
+    keyedBy: 'circle_id',
+    description: 'A circle was opened, with its slug, its name and whether it is open or invite-only.',
+  }),
+  'agora.whisper.sent': Object.freeze({
+    producer: 'agora',
+    payloadType: 'WhisperSent',
+    version: '1.0',
+    // The THREAD, not the message: two messages in one conversation must arrive in the order they
+    // were written, and two conversations have no ordering relationship at all.
+    keyedBy: 'thread_id',
+    description:
+      'A direct message was sent. Carries the two voices and the LENGTH of the message. The body is never on the bus — see the block header.',
+  }),
+  'agora.report.filed': Object.freeze({
+    producer: 'agora',
+    payloadType: 'ReportFiled',
+    version: '1.0',
+    keyedBy: 'report_id',
+    description:
+      'Somebody reported a post, a voice or a circle. The REPORTER IS NOT IN THE PAYLOAD: the subject is never told who reported them, and that must not depend on each consumer choosing not to show it.',
+  }),
+  'agora.moderation.acted': Object.freeze({
+    producer: 'agora',
+    payloadType: 'ModerationActed',
+    version: '1.0',
+    // The subject acted upon, so every action against one post or one voice is one ordered stream —
+    // which is what an appeal is answered from.
+    keyedBy: 'subject_id',
+    description:
+      'An operator acted on a report: dismissed it, removed a post, or suspended a voice. Carries the operator and the report it resolves.',
+  }),
+  'agora.notification.mail_requested': Object.freeze({
+    producer: 'agora',
+    payloadType: 'NotificationMailRequested',
+    version: '1.0',
+    keyedBy: 'notification_id',
+    description:
+      'A per-kind opted-in notification is due to be mailed. Emitted only by the leased fifteen-minute sweep, and only for a notification still unread — carries the account subject and a 200-character detail, never an address and never a post body.',
   }),
 } as const satisfies Readonly<Record<string, TopicSpec>>)
 
