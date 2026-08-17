@@ -437,6 +437,111 @@ export const TOPIC_AUDIT = Object.freeze({
   // stated here because the custody defect this table's header records was exactly the opposite
   // mistake, a subjectKind naming something the envelope key did not hold.
   'tessera.object.anchored': { audited: true, subjectKind: 'user', outcome: 'allowed' },
+
+  /* ------------------------------------------------------------------ the public square
+   *
+   * FOURTEEN topics, and TWO of them are audited. That ratio is the point rather than an oversight,
+   * and the line between them is the sharpest in this table because it is not about money.
+   *
+   * The estate's audited topics are all "the platform acted, or a customer's money moved". Agora has
+   * no money in it at all, so the first half of the test does all the work: **an operator suspending
+   * a voice or removing a post is the platform exercising authority over a person's speech, and
+   * there has to be a row proving what was done, by whom and against which report.** Those two are
+   * `agora.voice.suspended` and `agora.moderation.acted`, and the appeal that follows is answered
+   * from them or it is answered from nothing.
+   *
+   * Everything else on this service is people talking to each other, and `SQUARE` below argues why
+   * copying that into a hash-chained 730-day evidence log would be actively harmful rather than
+   * merely noisy. `agora.report.filed` is the one that looks like it belongs and does not — the
+   * argument is written out in full at its entry, because "somebody complained" reads like a
+   * security fact and is not one.
+   */
+  'agora.post.created': { audited: false, why: SQUARE('a post being published') },
+  'agora.post.edited': { audited: false, why: SQUARE('somebody correcting a typo') },
+  'agora.post.deleted': {
+    audited: false,
+    why:
+      'The sharpest case for SQUARE, and worth stating rather than folding into it: the audit log ' +
+      'is hash-chained and kept for years, so a mirror of this topic would be a permanent record ' +
+      'that a person deleted something — and, joined against the creation event, a record that it ' +
+      'existed at all. Auditing deletion is how a delete button becomes a lie. An operator who ' +
+      'REMOVES a post is a different fact and is audited: agora.moderation.acted below.',
+  },
+  'agora.spark.created': { audited: false, why: SQUARE('a like') },
+  'agora.echo.created': { audited: false, why: SQUARE('a repost') },
+  'agora.voice.renamed': {
+    audited: false,
+    why:
+      'A handle is a display name on one service, not a credential and not an identity: the ' +
+      'account behind it is unchanged, identity is untouched, and nothing an operator controls ' +
+      'happened. It is registered because a mention or a link that named the old handle is now ' +
+      'wrong and consumers need to hear that, which is a cache-invalidation fact rather than a ' +
+      'security one. The security-relevant renames — an email or an MFA factor changing — are ' +
+      "identity's topics, and those ARE audited above.",
+  },
+  'agora.follow.created': { audited: false, why: SQUARE('one person following another') },
+  'agora.bar.created': {
+    audited: false,
+    why:
+      'A bar is somebody protecting themselves, and it is the single most sensitive row this ' +
+      'service holds: it names two people and states that one of them wants nothing to do with the ' +
+      'other. 41-agora.md is explicit that the barred voice is never told, and a permanent ' +
+      'operator-readable record of every bar is exactly the thing that makes "never told" depend ' +
+      'on nobody looking. There is also no operator authority to prove — the platform did not act, ' +
+      'a user did — so the log would hold a personal safety decision and no accountability.',
+  },
+  'agora.circle.created': { audited: false, why: SQUARE('a group being opened') },
+  'agora.whisper.sent': {
+    audited: false,
+    why:
+      'A private message between two people, and the ONE topic in this registry where mirroring ' +
+      'metadata would be worse than mirroring content. The payload deliberately carries no body — ' +
+      'only the two voices and a length — so an audit row would add nothing an operator could act ' +
+      'on and everything a subpoena could read: who talked to whom, when, and how much, for every ' +
+      'pair on the square, retained for years and chained so it cannot be edited. That is a ' +
+      'surveillance archive built as a side effect of a feature nobody asked for it in.',
+  },
+  'agora.report.filed': {
+    audited: false,
+    why:
+      'This is the entry that looks like it belongs here and does not. A report is a USER asking ' +
+      'for review, not the platform acting: no authority has been exercised yet and there is ' +
+      'nothing to prove afterwards. The moment authority IS exercised, agora.moderation.acted ' +
+      'carries the reportId, so the operator question — "why was this removed, and on what ' +
+      'complaint" — is answerable from the audited row alone. Auditing both would also defeat a ' +
+      "rule the service is built around: the envelope's actor is the reporter, and 41-agora.md " +
+      'says the subject is never told who reported them. A permanent, exportable log keyed by the ' +
+      'thing reported, with the reporter in the actor column, is one careless console view away ' +
+      'from being that disclosure. The moderation queue shows an operator what they need while ' +
+      'the report is open; the evidence chain does not need to keep it for ever.',
+  },
+  // THE PLATFORM SILENCING A PERSON. A suspension is not a game state and not a preference — it is
+  // this service withdrawing somebody's right to speak on it, taken by an operator, against an
+  // account that keeps working everywhere else in the estate. If there is one row on this service
+  // an appeal must be able to produce, it is this one. `voice`, matching `keyedBy: 'voice_id'`.
+  'agora.voice.suspended': { audited: true, subjectKind: 'voice', outcome: 'allowed' },
+  // The general case of the same fact: an operator dismissed a report, removed a post, or lifted a
+  // suspension, and the payload carries who did it and which report it resolves.
+  //
+  // `subjectKind` is `agora_subject` rather than `post`, and that is the header's rule doing work
+  // rather than being quoted. This topic is keyed by `subject_id`, which is a POST id, a VOICE id
+  // or a CIRCLE id depending on what was acted upon — the discriminator is `subjectKind` in the
+  // payload. Writing `post` here would be precisely the custody defect this table's header records:
+  // a subjectKind naming something the envelope key does not always hold, so a console filtering on
+  // it returns the wrong rows and silently omits every suspension.
+  'agora.moderation.acted': { audited: true, subjectKind: 'agora_subject', outcome: 'allowed' },
+  'agora.notification.mail_requested': {
+    audited: false,
+    why:
+      'A notification becoming due for mail is plumbing, and the delivery record already exists ' +
+      'somewhere better: micro-notify holds every send, its status and its failures, which is ' +
+      'where an operator asking "did this person get the mail" already looks. Mirroring the ' +
+      'REQUEST here would put a row in the evidence chain for something that may never have been ' +
+      'sent, and would build — one row per opted-in notification, retained for years — a record of ' +
+      'who was told about whose activity. It carries the account subject, so that record would ' +
+      'name people. No authority is exercised: the sweep is a timer acting on a preference the ' +
+      'recipient set and can unset.',
+  },
 } as const satisfies Readonly<Record<TopicName, TopicAudit>>)
 
 /**
@@ -453,6 +558,29 @@ function SIMULATION(what: string): string {
     'and the title service owns the record. Including it would make the operator log mostly game ' +
     'traffic, which both buries the rows that matter and makes the hash chain that turns this log ' +
     'into evidence expensive to verify over every one of them.'
+  )
+}
+
+/**
+ * The other reason, spelled once, for the fourteen topics of the public square.
+ *
+ * It is deliberately NOT `SIMULATION` with a different noun. The game argument is "this does not
+ * matter enough to keep"; this one is the opposite — the rows matter a great deal, to the people in
+ * them, which is exactly why the operator log must not hold them. An audit log is hash-chained,
+ * exported and kept for years; a mirror of ordinary conversation is a permanent, tamper-evident
+ * social graph of who spoke to whom, assembled as a side effect and outliving both the post and the
+ * person's decision to delete it. Nothing on the square is an operator's to act on except
+ * moderation, and moderation has its own two topics that ARE audited.
+ */
+function SQUARE(what: string): string {
+  return (
+    `${what} is people using the product, not the platform acting on them. There is no operator ` +
+    'authority to prove afterwards and no operator action to take, and the audit log is chained ' +
+    'and retained for years — so mirroring it would build a permanent, tamper-evident record of ' +
+    'who interacted with whom that outlives the content itself, which is a surveillance archive ' +
+    'rather than an accountability one. The two facts on this service that ARE the platform acting ' +
+    '— a voice suspended, and a moderation action taken — are audited, and they are the rows an ' +
+    'appeal is answered from.'
   )
 }
 
