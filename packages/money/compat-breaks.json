@@ -1,7 +1,0 @@
-[
-  {
-    "path": "ENTRY_KINDS.length",
-    "acceptedIn": "1.3.0",
-    "reason": "ENTRY_KINDS is a frozen tuple, so its length is part of its type and adding a member necessarily changes it from 21 to 22. There is no additive form: a second array alongside it would be a second closed vocabulary, and micro-ledger validates entries against exactly one — the same reasoning that carried item_issue at 1.2.0. The added member is liquidity_seed, which Forge Exchange phase F needs to book the EMBER the estate seeds into a Hearth V2 pair (docs/ecosystem/39 §6). No existing kind fits: nothing was spent, nothing was converted at a rate, and no two subjects each still hold what they held. A consumer that reads the length reads a count of kinds it must already have a default branch for; one that indexes it is unaffected, because the member is appended, not inserted."
-  }
-]
