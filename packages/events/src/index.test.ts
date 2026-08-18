@@ -275,6 +275,37 @@ test('a forged producer on the six is now a defect rather than a shelved strange
 })
 
 /**
+ * The conversion topic, pinned against the emit site the same way.
+ *
+ * micro-org#495 §4. `activity/src/categories.ts` has carried a `conversion` category since the
+ * feed was written and no topic produced into it, so a user who swapped one coin for another had
+ * an empty timeline where the largest thing they did that day should be.
+ *
+ * `keyedBy` is the column to check, and it is the one this registration could most easily have got
+ * wrong: `micro-wallet` has no conversions table, so the obvious key — a conversion id — does not
+ * exist, and the next-most-obvious one, the user, would serialise every conversion a busy person
+ * makes behind the slowest consumer of the first. The ledger entry is the conversion's identity in
+ * every other part of this feature: it is what `wallet/src/money.ts` returns as `entryId`, what
+ * `GET /v1/conversions/:id` takes, and what the audit row's `subjectKind` names.
+ */
+test('the conversion proposal matches the emit site it was read from', () => {
+  assert.deepEqual(
+    TOPICS['wallet.conversion.completed'],
+    {
+      // wallet/src/money.ts — `key: entryId`, inside the same transaction that stores the
+      // idempotency response, so the event and the conversion commit or neither does.
+      producer: 'wallet',
+      payloadType: 'ConversionCompleted',
+      version: '1.0',
+      keyedBy: 'entry_id',
+      description:
+        'A user exchanged one asset for another at a quoted rate, and the journal entry is booked.',
+    },
+    'wallet/src/money.ts emits a spec the registry does not hold',
+  )
+})
+
+/**
  * The fourth adopted proposal was adopted VERBATIM, and that is a property worth asserting.
  *
  * Two repositories quarantined `market.offer.made` — the producer (`market/src/topics.ts`) and its
@@ -385,6 +416,7 @@ test('the registry is an enumerated inventory — every addition is deliberate',
     'trade.fill.settled',
     'trade.order.filled',
     'trade.transfer.settled',
+    'wallet.conversion.completed',
     'wallet.deposit.confirmed',
     'wallet.deposit.token_uncredited',
     'wallet.deposit_address.assigned',

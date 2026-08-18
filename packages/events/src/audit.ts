@@ -183,6 +183,17 @@ export const TOPIC_AUDIT = Object.freeze({
   // the balance was returned.
   'wallet.withdrawal.refunded': { audited: true, subjectKind: 'withdrawal', outcome: 'failed' },
   'wallet.withdrawal.stuck': { audited: true, subjectKind: 'withdrawal', outcome: 'failed' },
+  // Audited, and the reason is the exchange desk rather than the user. A conversion is the one
+  // money movement in the estate where the platform is the counterparty at a rate it quoted
+  // itself, so "at what rate, out of whose inventory, and when" is a question somebody will
+  // eventually have to answer to a regulator or to the person who thinks they were shortchanged.
+  // `subjectKind` is the journal entry because that is what the event is keyed by and what the
+  // read routes take. micro-org#495.
+  'wallet.conversion.completed': {
+    audited: true,
+    subjectKind: 'ledger_entry',
+    outcome: 'allowed',
+  },
   'settlement.withdrawal.completed': {
     audited: true,
     subjectKind: 'withdrawal',

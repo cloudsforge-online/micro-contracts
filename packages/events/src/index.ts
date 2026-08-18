@@ -506,6 +506,31 @@ export const TOPICS = Object.freeze({
     description:
       'A withdrawal passed its deadline with no word from settlement. Funds are still reserved.',
   }),
+
+  /* ── wallet — the conversion the activity feed has had a category for and no event ────────────
+   *
+   * micro-org#495 §4. `activity/src/categories.ts` has listed `conversion` as a category since the
+   * feed was written, and no topic in this registry produced into it: a user who swapped one coin
+   * for another saw nothing in their activity, and an operator investigating "what did this person
+   * do with their EMBER" had the ledger journal and nothing a person reads.
+   *
+   * `keyedBy: entry_id` is read off the producer rather than chosen here. A conversion has no
+   * identity of its own in `micro-wallet` — there is no conversions table, deliberately, because
+   * the journal entry already carries every figure (`fromAssetCode`, `toAssetCode`, `fromAmount`,
+   * `toAmount`, `rateScale`, `quotedAt` in its metadata) and a second copy is a second thing to
+   * disagree. The ledger entry id IS the conversion id, and it is what `GET /v1/conversions/:id`
+   * takes. Keying by the USER would have been the tidier partition and is wrong: two conversions
+   * by one person have no ordering relationship to each other, and pretending they do makes a
+   * consumer's retry of the older one arrive after the newer.
+   * ────────────────────────────────────────────────────────────────────────────────────────────── */
+  'wallet.conversion.completed': Object.freeze({
+    producer: 'wallet',
+    payloadType: 'ConversionCompleted',
+    version: '1.0',
+    keyedBy: 'entry_id',
+    description:
+      'A user exchanged one asset for another at a quoted rate, and the journal entry is booked.',
+  }),
   'settlement.withdrawal.completed': Object.freeze({
     producer: 'settlement',
     payloadType: 'WithdrawalCompleted',

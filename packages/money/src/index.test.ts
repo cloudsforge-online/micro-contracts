@@ -355,7 +355,28 @@ test('the entry kinds are the closed set from the domain model, in order', () =>
   )
   assert.equal(isEntryKind('deposit_credited'), true)
   assert.equal(isEntryKind('topup'), false)
-  assert.equal(ACCOUNT_PURPOSES.length, 7)
+  assert.equal(ACCOUNT_PURPOSES.length, 8)
+})
+
+test('inventory is a purpose, because the exchange desk sells out of a stock it can exhaust', () => {
+  // micro-org#495 §1. `micro-wallet`'s `convert()` posted both counter-legs to `clearing`, and
+  // `ledger_assert_no_overdraft` returns early for `type = 'clearing'` BEFORE it reads
+  // `overdraft_allowed` — so a user converting into EMBER received EMBER the platform never had,
+  // and the counter-account simply went further negative with nothing anywhere refusing.
+  //
+  // The desk is `exchange`/`inventory`/`equity`. `equity` falls through to the overdraft check, so
+  // the refusal is Postgres's, inside the entry's transaction, serialised on the balance row —
+  // which is what makes it hold against two conversions racing for the last of a coin. The
+  // TypeScript pre-check in `micro-wallet` exists so the ordinary case gets a named 409 rather
+  // than a constraint violation; it is not what makes the invariant true.
+  assert.equal(ACCOUNT_PURPOSES.includes('inventory'), true)
+  // Appended, like every entry kind above, because each tuple index is a published path to the
+  // additive-evolution check.
+  assert.equal(ACCOUNT_PURPOSES.at(-1), 'inventory')
+  // It is not overdraft-exempt, and that is the entire point of choosing it over `clearing`.
+  assert.equal(permitsOverdraft({ purpose: 'inventory' }), false)
+  assert.equal(wouldOverdraw({ type: 'equity', purpose: 'inventory' }, -1n), true)
+  assert.equal(wouldOverdraw({ type: 'equity', purpose: 'inventory' }, 0n), false)
 })
 
 test('item_issue is in the set, because micro-tessera posts it on every object activation', () => {
