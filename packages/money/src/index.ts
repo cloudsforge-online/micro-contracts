@@ -434,6 +434,18 @@ export type Actor = `user:${string}` | `service:${string}` | `operator:${string}
  */
 export type AccountType = 'liability' | 'asset' | 'revenue' | 'expense' | 'equity' | 'clearing'
 
+/**
+ * `inventory` is the exchange desk's stock of a coin, and it is a purpose rather than a reuse of
+ * `treasury` because the two answer different questions. A treasury balance is money the platform
+ * holds; an inventory balance is money the platform has undertaken to sell at a quoted rate, and
+ * an operator has to be able to read one without the other to know whether the desk can trade.
+ *
+ * Held at type `equity` (`exchange`/`inventory`/`equity`), which is the whole safety argument for
+ * the desk: `ledger_assert_no_overdraft` returns early for `clearing` BEFORE it reads
+ * `overdraft_allowed`, so a conversion whose counter-legs land in `clearing` hands a user a coin
+ * the platform never had. An `equity` account falls through to that check and is refused by
+ * Postgres inside the entry's own transaction, serialised on the balance row. micro-org#495 §1.
+ */
 export type AccountPurpose =
   | 'available'
   | 'reserved'
@@ -442,6 +454,7 @@ export type AccountPurpose =
   | 'fees'
   | 'payout_due'
   | 'suspense'
+  | 'inventory'
 
 export type AccountStatus = 'open' | 'frozen' | 'closed'
 
@@ -462,6 +475,7 @@ export const ACCOUNT_PURPOSES: readonly AccountPurpose[] = Object.freeze([
   'fees',
   'payout_due',
   'suspense',
+  'inventory',
 ])
 
 /** The three fields that identify an account. Unique together; nothing else may be. */

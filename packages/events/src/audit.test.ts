@@ -14,7 +14,7 @@ import { AUDITED_TOPICS, TOPIC_AUDIT, auditRowFor } from './audit.ts'
 test('every registered topic has an audit decision, and every decision names a real topic', () => {
   const decided = Object.keys(TOPIC_AUDIT).sort()
   assert.deepEqual(decided, [...TOPIC_NAMES].sort())
-  assert.equal(decided.length, 84, 'the topic registry changed; every addition needs a decision')
+  assert.equal(decided.length, 85, 'the topic registry changed; every addition needs a decision')
 })
 
 /**
@@ -92,6 +92,9 @@ test('the inventory of audited topics is pinned — a widening is deliberate', (
     'trade.fill.settled',
     'trade.order.filled',
     'trade.transfer.settled',
+    // micro-org#495. The rate and the inventory it came out of are the audit: the platform is the
+    // counterparty to every conversion, at a price it quoted itself.
+    'wallet.conversion.completed',
     'wallet.deposit.confirmed',
     // micro-org#200. Audited for the same reason its sibling above is — it is a fact about a
     // customer's money — and it is the only entry in this inventory that records money the estate
